@@ -1,0 +1,59 @@
+name:          hprox
+version:       0.0.1.0
+synopsis:      a simple HTTP proxy server
+description:
+  A simple HTTP proxy server built with WAI interface.
+
+    * supports basic HTTP GET/CONNECT methods
+    * provides PAC file for easy configuration of some clients/browsers
+    * supports simple password authentication
+
+  Use @hprox --help@ for detailed usage help.
+
+license:       Apache-2.0
+license-file:  LICENSE
+author:        Bin Jin
+maintainer:    bjin@ctrl-d.org
+category:      Web
+build-type:    Simple
+cabal-version: >=1.10
+
+flag static
+  description:
+    Enable static build
+  Default:
+    False
+
+executable hprox
+  main-is:
+    Main.hs
+  ghc-options:
+    -Wall -O2 -threaded -rtsopts "-with-rtsopts=-N -c"
+  if flag(static)
+    ghc-options:
+      -optl-static
+  other-modules:
+    DumbApp,
+    HProx
+  build-depends:
+    async,
+    base,
+    base64-bytestring,
+    binary,
+    bytestring,
+    case-insensitive,
+    conduit,
+    conduit-extra,
+    http-client,
+    http-reverse-proxy >= 0.4.0,
+    http-types,
+    network,
+    optparse-applicative,
+    tls,
+    unix,
+    wai,
+    wai-extra,
+    warp >= 3.2.8,
+    warp-tls
+  default-language:
+    Haskell2010
