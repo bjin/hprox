@@ -23,7 +23,8 @@ import           Data.Maybe                (fromJust, fromMaybe, isJust,
                                             isNothing)
 import qualified Network.HTTP.Client       as HC
 import           Network.HTTP.ReverseProxy (ProxyDest (..), SetIpHeader (..),
-                                            WaiProxyResponse (..), def,
+                                            WaiProxyResponse (..),
+                                            defaultWaiProxySettings,
                                             waiProxyToSettings, wpsSetIpHeader)
 import qualified Network.HTTP.Types        as HT
 import qualified Network.HTTP.Types.Header as HT
@@ -144,7 +145,7 @@ proxyAuthRequiredResponse pset = responseLBS
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
 httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
-    settings = def { wpsSetIpHeader = SIHNone }
+    settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
         | not isGetProxy     = WPRApplication fallback

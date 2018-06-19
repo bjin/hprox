@@ -109,7 +109,7 @@ main = do
 
         settings = setNoParsePath True $
                    setServerName "Apache" $
-                   fromMaybe id (setBeforeMainLoop . setuid <$> _user opts)
+                   maybe id (setBeforeMainLoop . setuid) (_user opts)
                    defaultSettings
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
