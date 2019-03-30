@@ -33,6 +33,7 @@ data Opts = Opts
   , _ssl  :: [(String, CertFile)]
   , _user :: Maybe String
   , _auth :: Maybe FilePath
+  , _ws   :: Maybe String
   }
 
 data CertFile = CertFile
@@ -61,6 +62,7 @@ parser = info (helper <*> opts) fullDesc
                 <*> ssl
                 <*> user
                 <*> auth
+                <*> ws
 
     bind = optional $ fromString <$> strOption
         ( long "bind"
@@ -91,6 +93,11 @@ parser = info (helper <*> opts) fullDesc
        <> short 'a'
        <> metavar "users.txt"
        <> help "password file for proxy authentication")
+
+    ws = optional $ strOption
+        ( long "ws"
+       <> metavar "remote-host:80"
+       <> help "remote host to handle websocket requests")
 
 
 setuid :: String -> IO ()
@@ -134,7 +141,7 @@ main = do
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- HC.newManager HC.defaultManagerSettings
 
-    let pset = ProxySettings pauth Nothing
+    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts)
         proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager dumbApp
         port = _port opts
 

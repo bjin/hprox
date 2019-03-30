@@ -25,7 +25,8 @@ import qualified Network.HTTP.Client       as HC
 import           Network.HTTP.ReverseProxy (ProxyDest (..), SetIpHeader (..),
                                             WaiProxyResponse (..),
                                             defaultWaiProxySettings,
-                                            waiProxyToSettings, wpsSetIpHeader)
+                                            waiProxyToSettings, wpsSetIpHeader,
+                                            wpsUpgradeToRaw)
 import qualified Network.HTTP.Types        as HT
 import qualified Network.HTTP.Types.Header as HT
 
@@ -35,6 +36,7 @@ import           Network.Wai
 data ProxySettings = ProxySettings
   { proxyAuth  :: Maybe (BS.ByteString -> Bool)
   , passPrompt :: Maybe BS.ByteString
+  , wsRemote   :: Maybe BS.ByteString
   }
 
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
@@ -148,10 +150,15 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
+        | redirectWebsocket  = WPRProxyDest (ProxyDest wsHost wsPort)
         | not isGetProxy     = WPRApplication fallback
         | checkAuth pset req = WPRModifiedRequest nreq (ProxyDest host port)
         | otherwise          = WPRResponse (proxyAuthRequiredResponse pset)
       where
+        isWebsocket = wpsUpgradeToRaw defaultWaiProxySettings req
+        redirectWebsocket = isWebsocket && isJust (wsRemote pset)
+        (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust (wsRemote pset))
+
         notCONNECT = requestMethod req /= "CONNECT"
         rawPath = rawPathInfo req
         rawPathPrefix = "http://"
