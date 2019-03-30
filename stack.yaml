@@ -1,7 +1,19 @@
-resolver: nightly-2018-06-27
+resolver: lts-12.14
 packages:
 - '.'
-extra-deps: []
+- location:
+    git: git://github.com/vincenthz/hs-tls.git
+    commit: 35317d8c2b920c33ca99ac0dd7197c7b8988da62
+  subdirs:
+  - core
+  extra-dep: true
+- location:
+    git: git://github.com/yesodweb/wai.git
+    commit: fce402961a03fec97bd2eb2ea5d25b5162f8cd43
+  subdirs:
+  - warp-tls
+  extra-dep: true
+extra-deps:
+  - x509-1.7.5
 flags: {}
 extra-package-dbs: []
-compiler-check: newer-minor
