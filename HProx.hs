@@ -3,32 +3,36 @@
 module HProx
   ( ProxySettings(..)
   , httpProxy
+  , pacProvider
   , httpGetProxy
   , httpConnectProxy
+  , reverseProxy
   , forceSSL
+  , dumbApp
   ) where
 
-import           Control.Applicative       ((<|>))
-import           Control.Concurrent.Async  (concurrently)
-import           Control.Exception         (SomeException, try)
-import           Control.Monad             (unless, void, when)
-import           Control.Monad.IO.Class    (liftIO)
-import qualified Data.Binary.Builder       as BB
-import qualified Data.ByteString           as BS
-import           Data.ByteString.Base64    (decodeLenient)
-import qualified Data.ByteString.Char8     as BS8
-import qualified Data.CaseInsensitive      as CI
-import qualified Data.Conduit.Network      as CN
-import           Data.Maybe                (fromJust, fromMaybe, isJust,
-                                            isNothing)
-import qualified Network.HTTP.Client       as HC
-import           Network.HTTP.ReverseProxy (ProxyDest (..), SetIpHeader (..),
-                                            WaiProxyResponse (..),
-                                            defaultWaiProxySettings,
-                                            waiProxyToSettings, wpsSetIpHeader,
-                                            wpsUpgradeToRaw)
-import qualified Network.HTTP.Types        as HT
-import qualified Network.HTTP.Types.Header as HT
+import           Control.Applicative        ((<|>))
+import           Control.Concurrent.Async   (concurrently)
+import           Control.Exception          (SomeException, try)
+import           Control.Monad              (unless, void, when)
+import           Control.Monad.IO.Class     (liftIO)
+import qualified Data.Binary.Builder        as BB
+import qualified Data.ByteString            as BS
+import           Data.ByteString.Base64     (decodeLenient)
+import qualified Data.ByteString.Char8      as BS8
+import qualified Data.ByteString.Lazy.Char8 as LBS8
+import qualified Data.CaseInsensitive       as CI
+import qualified Data.Conduit.Network       as CN
+import           Data.Maybe                 (fromJust, fromMaybe, isJust,
+                                             isNothing)
+import qualified Network.HTTP.Client        as HC
+import           Network.HTTP.ReverseProxy  (ProxyDest (..), SetIpHeader (..),
+                                             WaiProxyResponse (..),
+                                             defaultWaiProxySettings,
+                                             waiProxyToSettings, wpsSetIpHeader,
+                                             wpsUpgradeToRaw)
+import qualified Network.HTTP.Types         as HT
+import qualified Network.HTTP.Types.Header  as HT
 
 import           Data.Conduit
 import           Network.Wai
@@ -37,10 +41,22 @@ data ProxySettings = ProxySettings
   { proxyAuth  :: Maybe (BS.ByteString -> Bool)
   , passPrompt :: Maybe BS.ByteString
   , wsRemote   :: Maybe BS.ByteString
+  , revRemote  :: Maybe BS.ByteString
   }
 
+dumbApp :: Application
+dumbApp _req respond =
+    respond $ responseLBS
+        HT.status200
+        [("Content-Type", "text/html")] $
+        LBS8.unlines [ "<html><body><h1>It works!</h1>"
+                     , "<p>This is the default web page for this server.</p>"
+                     , "<p>The web server software is running but no content has been added, yet.</p>"
+                     , "</body></html>"
+                     ]
+
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
-httpProxy set mgr = httpGetProxy set mgr . httpConnectProxy set
+httpProxy set mgr = pacProvider . httpGetProxy set mgr . httpConnectProxy set
 
 forceSSL :: Middleware
 forceSSL app req respond
@@ -143,6 +159,48 @@ proxyAuthRequiredResponse pset = responseLBS
     ""
   where
     prompt = fromMaybe "hprox" (passPrompt pset)
+
+pacProvider :: Middleware
+pacProvider fallback req respond
+    | pathInfo req == ["get", "hprox.pac"],
+      Just host' <- lookup "x-forwarded-host" (requestHeaders req) <|> requestHeaderHost req =
+        let issecure = case lookup "x-forwarded-proto" (requestHeaders req) of
+                Just proto -> proto == "https"
+                Nothing    -> isSecure req
+            scheme = if issecure then "HTTPS" else "PROXY"
+            defaultPort = if issecure then ":443" else ":80"
+            host | 58 `BS.elem` host' = host' -- ':'
+                 | otherwise          = host' `BS.append` defaultPort
+        in respond $ responseLBS
+               HT.status200
+               [("Content-Type", "application/x-ns-proxy-autoconfig")] $
+               LBS8.unlines [ "function FindProxyForURL(url, host) {"
+                            , LBS8.fromChunks ["  return \"", scheme, " ", host, "\";"]
+                            , "}"
+                            ]
+    | otherwise = fallback req respond
+
+reverseProxy :: ProxySettings -> HC.Manager -> Middleware
+reverseProxy pset mgr fallback
+    | isReverseProxy = waiProxyToSettings (return.proxyResponseFor) settings mgr
+    | otherwise      = fallback
+  where
+    settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
+
+    isReverseProxy = isJust (revRemote pset)
+    (revHost, revPort) = parseHostPortWithDefault 80 (fromJust (revRemote pset))
+
+    proxyResponseFor req = WPRModifiedRequest nreq (ProxyDest revHost revPort)
+      where
+        nreq = req
+          { requestHeaders = hdrs
+          , requestHeaderHost = Just revHost
+          }
+
+        hdrs = (HT.hHost, revHost) : [ (hdn, hdv)
+                                     | (hdn, hdv) <- requestHeaders req
+                                     , not (isToStripHeader hdn) && hdn /= HT.hHost
+                                     ]
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
 httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr

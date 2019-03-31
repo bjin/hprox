@@ -33,7 +33,6 @@ executable hprox
     ghc-options:
       -optl-static
   other-modules:
-    DumbApp,
     HProx
   build-depends:
     async,

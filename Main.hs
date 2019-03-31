@@ -23,9 +23,8 @@ import           Data.Maybe
 import           Data.Monoid                 ((<>))
 import           Options.Applicative
 
-import           DumbApp                     (dumbApp)
 import           HProx                       (ProxySettings (..), forceSSL,
-                                              httpProxy)
+                                              httpProxy, reverseProxy, dumbApp)
 
 data Opts = Opts
   { _bind :: Maybe HostPreference
@@ -34,6 +33,7 @@ data Opts = Opts
   , _user :: Maybe String
   , _auth :: Maybe FilePath
   , _ws   :: Maybe String
+  , _rev  :: Maybe String
   }
 
 data CertFile = CertFile
@@ -63,6 +63,7 @@ parser = info (helper <*> opts) fullDesc
                 <*> user
                 <*> auth
                 <*> ws
+                <*> rev
 
     bind = optional $ fromString <$> strOption
         ( long "bind"
@@ -98,6 +99,11 @@ parser = info (helper <*> opts) fullDesc
         ( long "ws"
        <> metavar "remote-host:80"
        <> help "remote host to handle websocket requests")
+
+    rev = optional $ strOption
+        ( long "rev"
+       <> metavar "remote-host:80"
+       <> help "remote host for revere proxy")
 
 
 setuid :: String -> IO ()
@@ -141,8 +147,8 @@ main = do
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- HC.newManager HC.defaultManagerSettings
 
-    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts)
-        proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager dumbApp
+    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts) (BS8.pack <$> _rev opts)
+        proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
         port = _port opts
 
     case _bind opts of
