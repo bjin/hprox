@@ -123,7 +123,7 @@ isForwardedHeader k
     ca = idx 10
 
 isToStripHeader :: HT.HeaderName -> Bool
-isToStripHeader h = isProxyHeader h || isForwardedHeader h || h == "X-Real-IP"
+isToStripHeader h = isProxyHeader h || isForwardedHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
 checkAuth :: ProxySettings -> Request -> Bool
 checkAuth pset req
@@ -167,8 +167,10 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
 
         isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
         hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
+        scheme = lookup "X-Scheme" (requestHeaders req)
+        isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
 
-        isGetProxy = notCONNECT && (isRawPathProxy || isJust hostHeader && hasProxyHeader)
+        isGetProxy = notCONNECT && (isRawPathProxy || isHTTP2Proxy || isJust hostHeader && hasProxyHeader)
 
         nreq = req
           { rawPathInfo = newRawPath
