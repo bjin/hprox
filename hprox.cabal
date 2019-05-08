@@ -46,11 +46,10 @@ executable hprox
     http-client,
     http-reverse-proxy >= 0.4.0,
     http-types,
-    network,
     optparse-applicative,
     tls,
     unix,
-    wai,
+    wai >= 3.2.2,
     wai-extra,
     warp >= 3.2.8,
     warp-tls

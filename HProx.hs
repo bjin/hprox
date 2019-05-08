@@ -33,6 +33,7 @@ import           Network.HTTP.ReverseProxy  (ProxyDest (..), SetIpHeader (..),
                                              wpsUpgradeToRaw)
 import qualified Network.HTTP.Types         as HT
 import qualified Network.HTTP.Types.Header  as HT
+import           Network.Wai.Internal       (getRequestBodyChunk)
 
 import           Data.Conduit
 import           Network.Wai
@@ -266,7 +267,7 @@ httpConnectProxy pset fallback req respond
       where
         streaming write flush = do
             flush
-            handleConnect False (requestBody req) (\bs -> write (BB.fromByteString bs) >> flush)
+            handleConnect False (getRequestBodyChunk req) (\bs -> write (BB.fromByteString bs) >> flush)
 
     handleConnect :: Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
     handleConnect http1 fromClient' toClient' = CN.runTCPClient settings $ \server ->

@@ -4,17 +4,15 @@ module Main where
 
 import qualified Data.ByteString.Char8       as BS8
 import           Data.String                 (fromString)
-import           Network                     (PortID (..), listenOn)
 import qualified Network.HTTP.Client         as HC
 import           Network.TLS                 as TLS
 import           Network.Wai.Handler.Warp    (HostPreference, defaultSettings,
-                                              runSettings, runSettingsSocket,
-                                              setBeforeMainLoop, setHost,
-                                              setNoParsePath, setPort,
+                                              runSettings, setBeforeMainLoop,
+                                              setHost, setNoParsePath, setPort,
                                               setServerName)
 import           Network.Wai.Handler.WarpTLS (OnInsecure (..), onInsecure,
-                                              runTLS, runTLSSocket,
-                                              tlsServerHooks, tlsSettings)
+                                              runTLS, tlsServerHooks,
+                                              tlsSettings)
 import           Network.Wai.Middleware.Gzip (def, gzip)
 import           System.Posix.User           (UserEntry (..),
                                               getUserEntryForName, setUserID)
@@ -139,8 +137,6 @@ main = do
 
         runner | isSSL     = runTLS tlsset
                | otherwise = runSettings
-        runnerSocket | isSSL     = runTLSSocket tlsset
-                     | otherwise = runSettingsSocket
 
     pauth <- case _auth opts of
         Nothing -> return Nothing
@@ -151,8 +147,4 @@ main = do
         proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
         port = _port opts
 
-    case _bind opts of
-        Just hostp -> runner (setHost hostp $ setPort port settings) proxy
-        Nothing    -> do
-            socket <- listenOn (PortNumber $ fromIntegral port)
-            runnerSocket settings socket proxy
+    runner (setHost (fromMaybe "*6" (_bind opts)) $ setPort port settings) proxy

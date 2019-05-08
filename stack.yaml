@@ -1,4 +1,4 @@
-resolver: lts-12.14
+resolver: lts-13.20
 packages:
 - '.'
 extra-deps:
@@ -14,6 +14,5 @@ extra-deps:
   commit: http2-scheme
   subdirs:
   - warp
-- x509-1.7.5
 flags: {}
 extra-package-dbs: []
