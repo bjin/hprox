@@ -24,8 +24,8 @@ import           Data.Maybe
 import           Data.Monoid                 ((<>))
 import           Options.Applicative
 
-import           HProx                       (ProxySettings (..), forceSSL,
-                                              httpProxy, reverseProxy, dumbApp)
+import           HProx                       (ProxySettings (..), dumbApp,
+                                              forceSSL, httpProxy, reverseProxy)
 
 data Opts = Opts
   { _bind :: Maybe HostPreference
