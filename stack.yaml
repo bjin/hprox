@@ -1,15 +1,9 @@
-resolver: lts-13.20
+resolver: lts-13.24
 packages:
 - '.'
 extra-deps:
-- github: vincenthz/hs-tls
-  commit: 35317d8c2b920c33ca99ac0dd7197c7b8988da62
-  subdirs:
-  - core
-- github: yesodweb/wai
-  commit: fce402961a03fec97bd2eb2ea5d25b5162f8cd43
-  subdirs:
-  - warp-tls
+- tls-1.5.0
+- warp-tls-3.2.5
 - github: bjin/wai
   commit: http2-scheme
   subdirs:
