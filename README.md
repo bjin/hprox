@@ -29,3 +29,7 @@ stack install
 
 * Only HTTP server are supported for websocket and reverse proxy redirection.
 * Passwords are stored in plain text for now, please avoid using existing password.
+
+### License
+
+`hprox` is licensed under the Apache license. See LICENSE file for details.
