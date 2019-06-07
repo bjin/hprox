@@ -94,7 +94,7 @@ parser = info (helper <*> opts) fullDesc
         ( long "auth"
        <> short 'a'
        <> metavar "users.txt"
-       <> help "password file for proxy authentication")
+       <> help "password file for proxy authentication (each line with a colon separated user/pass pair)")
 
     ws = optional $ strOption
         ( long "ws"
