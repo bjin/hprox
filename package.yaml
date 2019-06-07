@@ -1,0 +1,60 @@
+name:                hprox
+version:             0.1.0
+github:              "bjin/hprox"
+license:             Apache-2.0
+author:              "Bin Jin"
+maintainer:          "bjin@ctrl-d.org"
+copyright:           "2019 Bin Jin"
+
+synopsis:            a lightweight HTTP proxy server, and more
+category:            Web
+
+description:
+  Please see the README on GitHub at <https://github.com/bjin/hprox#readme>
+
+extra-source-files:
+- README.md
+
+dependencies:
+- async
+- base >= 4.7 && < 5
+- base64-bytestring
+- binary
+- bytestring
+- case-insensitive
+- conduit
+- conduit-extra
+- http-client
+- http-reverse-proxy >= 0.4.0
+- http-types
+- optparse-applicative
+- tls >= 1.5.0
+- unix
+- wai >= 3.2.2
+- wai-extra
+- warp >= 3.2.8
+- warp-tls >= 3.2.5
+
+flags:
+  static:
+    description: Enable static build
+    manual: true
+    default: false
+
+ghc-options:
+- -Wall
+- -O2
+- -threaded
+- -rtsopts
+- -with-rtsopts=-N
+
+executables:
+  hprox:
+    main:                Main.hs
+    source-dirs:
+    - src
+    other-modules:
+    - HProx
+    when:
+    - condition: flag(static)
+      ghc-options: -optl-static
