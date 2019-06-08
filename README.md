@@ -9,16 +9,14 @@ hprox is a lightweight HTTP/HTTPS proxy server.
 
 ### Features
 
-* **Basic HTTP proxy functionality**, including `HTTP GET` and `HTTP CONNECT` support.
-* Simple **password authentication**.
-* **HTTPS encryption** (requires a valid certificate). Supports `TLS 1.3` and
-  `HTTP 2`, also known as SPDY Proxy.
-* **TLS SNI validation** for HTTPS connections, which blocks all incoming connections with wrong domain name.
-* Provide **PAC file for easy client side configuration**. Supports Chrome and Firefox.
-* Can run upon any Haskell Web Application with `wai` interface. Defaults to
-  a dumb application which simulate the default empty page from Apache.
-* **Websocket redirection**. Compatible with [v2ray-plugin for shadowsocks](https://github.com/shadowsocks/v2ray-plugin).
-* **Reverse proxy support**, which redirect requests to a fallback server.
+* Basic HTTP proxy functionality, including `HTTP GET` and `HTTP CONNECT` support.
+* Simple password authentication.
+* HTTPS encryption (requires a valid certificate). Supports `TLS 1.3` and `HTTP 2`, also known as SPDY Proxy.
+* TLS SNI validation for HTTPS connections, which blocks all incoming connections with wrong domain name.
+* Provide PAC file for easy client side configuration. Supports Chrome and Firefox.
+* Can run upon any Haskell Web Application with `wai` interface. Defaults to a dumb application which simulate the default empty page from Apache.
+* Websocket redirection. Compatible with [v2ray-plugin for shadowsocks](https://github.com/shadowsocks/v2ray-plugin).
+* Reverse proxy support, which redirect requests to a fallback server.
 
 Use `hprox --help` to list the options for further details.
 
