@@ -2,6 +2,11 @@
 
 hprox is a lightweight HTTP/HTTPS proxy server.
 
+[![CircleCI](https://circleci.com/gh/bjin/hprox.svg?style=shield)](https://circleci.com/gh/bjin/hprox)
+[![Hackage](https://img.shields.io/hackage/v/hprox.svg)](https://hackage.haskell.org/package/hprox)
+![Depends](https://img.shields.io/hackage-deps/v/hprox.svg)
+[![License](https://img.shields.io/github/license/bjin/hprox.svg)](https://github.com/bjin/hprox/blob/master/LICENSE)
+
 ### Features
 
 * Basic HTTP proxy support, including HTTP GET/HTTP CONNECT support.
