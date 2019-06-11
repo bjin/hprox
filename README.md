@@ -15,7 +15,7 @@
 * TLS encryption (requires a valid certificate). Supports TLS 1.3 and HTTP 2, also known as SPDY Proxy.
 * TLS SNI validation (blocks all clients with invalid domain name).
 * Provide PAC file for easy client side configuration (supports Chrome and Firefox).
-* Websocket redirection (compatible with [v2ray-plugin for shadowsocks](https://github.com/shadowsocks/v2ray-plugin)).
+* Websocket redirection (compatible with [v2ray-plugin](https://github.com/shadowsocks/v2ray-plugin)).
 * Reverse proxy support (redirect requests to a fallback server).
 * Implemented as a middleware, compatible with any Haskell Web Application built with `wai` interface.
   Defaults to fallback to a dumb application which simulate the default empty page from Apache.
@@ -40,7 +40,6 @@ Use `hprox --help` to list options with detailed explanation.
 
 ```sh
 echo "user:pass" > userpass.txt
-chmod 600 userpass.txt
 hprox -p 8080 -a userpass.txt
 ```
 
@@ -50,16 +49,16 @@ hprox -p 8080 -a userpass.txt
 hprox -p 443 -s example.com:/etc/letsencrypt/live/example.com/fullchain.pem:/etc/letsencrypt/live/example.com/privkey.pem
 ```
 
-Browsers can then be configured with PAC file URL `https://example.com/get/hprox.pac`.
+Browsers can be configured with PAC file URL `https://example.com/get/hprox.pac`.
 
-* To work with `v2ray-plugin`, with fallback page to ubuntu mirrors:
+* To work with `v2ray-plugin`, with fallback page to [ubuntu archive](http://archive.ubuntu.com/):
 
 ```sh
 v2ray-plugin -server -localPort 8080 -mode websocket -host example.com -remotePort xxxx
 hprox -p 443 -s example.com:fullchain.pem:privkey.pem --ws 127.0.0.1:8080 --rev archive.ubuntu.com:80
 ```
 
-Clients will be able to connect with option `tls;host=example.com`.
+Clients will be able to connect with plugin option `tls;host=example.com`.
 
 ### Known Issue
 
