@@ -17,7 +17,7 @@
 * Provide PAC file for easy client side configuration (supports Chrome and Firefox).
 * Websocket redirection (compatible with [v2ray-plugin for shadowsocks](https://github.com/shadowsocks/v2ray-plugin)).
 * Reverse proxy support (redirect requests to a fallback server).
-* Implemented as a middleware, compatible with any Haskell Web Application with `wai` interface.
+* Implemented as a middleware, compatible with any Haskell Web Application built with `wai` interface.
   Defaults to fallback to a dumb application which simulate the default empty page from Apache.
 
 ### Installation
@@ -25,7 +25,7 @@
 `hprox` should build and work on all unix-like OS with `ghc` support, but it's only
 been tested on Linux and macOS.
 
-[stack](https://docs.haskellstack.org/en/stable/README/#how-to-install) is required to build `hprox`.
+[stack](https://docs.haskellstack.org/en/stable/README/#how-to-install) is recommended to build `hprox`.
 
 ```sh
 stack setup
