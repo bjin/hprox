@@ -9,16 +9,19 @@ jobs:
           # Read about caching dependencies: https://circleci.com/docs/2.0/caching/
           name: Restore Cached Dependencies
           keys:
-            - cci-hprox-v1-{{ checksum "package.yaml" }}-{{ checksum "stack.yaml" }}
+            - cci-hprox-v2-{{ checksum "stack.yaml" }}
       - run:
           name: Resolve/Update Dependencies
           command: stack setup
+      - run:
+          name: workaround for OOM (build http-reverse-proxy first)
+          command: stack build http-reverse-proxy
       - run:
           name: Install executable
           command: stack install
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-v1-{{ checksum "package.yaml" }}-{{ checksum "stack.yaml" }}
+          key: cci-hprox-v2-{{ checksum "stack.yaml" }}
           paths:
             - "/root/.stack"
             - ".stack-work"
