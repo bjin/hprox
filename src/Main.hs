@@ -70,7 +70,7 @@ parser = info (helper <*> opts) fullDesc
         ( long "bind"
        <> short 'b'
        <> metavar "bind_ip"
-       <> help "The address to bind on (default: all interfaces)")
+       <> help "the ip address to bind on (default: all interfaces)")
 
     port = optional $ option auto
         ( long "port"
@@ -79,10 +79,10 @@ parser = info (helper <*> opts) fullDesc
        <> help "port number (default 3000)")
 
     ssl = many $ option (eitherReader parseSSL)
-        ( long "ssl"
+        ( long "tls"
        <> short 's'
        <> metavar "hostname:cerfile:keyfile"
-       <> help "enable SSL and specify a SSL certificates")
+       <> help "enable TLS and specify TLS certificates")
 
     user = optional $ strOption
         ( long "user"
@@ -93,18 +93,18 @@ parser = info (helper <*> opts) fullDesc
     auth = optional $ strOption
         ( long "auth"
        <> short 'a'
-       <> metavar "users.txt"
-       <> help "password file for proxy authentication (each line with a colon separated user/pass pair)")
+       <> metavar "userpass.txt"
+       <> help "password file for proxy authentication (plain text file with lines each containaing a colon separated user/password pair)")
 
     ws = optional $ strOption
         ( long "ws"
        <> metavar "remote-host:80"
-       <> help "remote host to handle websocket requests")
+       <> help "remote host to handle websocket requests (http server only)")
 
     rev = optional $ strOption
         ( long "rev"
        <> metavar "remote-host:80"
-       <> help "remote host for revere proxy")
+       <> help "remote host for revere proxy (http server only)")
 
 
 setuid :: String -> IO ()
