@@ -82,7 +82,7 @@ parser = info (helper <*> opts) fullDesc
         ( long "tls"
        <> short 's'
        <> metavar "hostname:cerfile:keyfile"
-       <> help "enable TLS and specify TLS certificates")
+       <> help "enable TLS and specify a domain and associated TLS certificate (can be used multiple times for multiple domains)")
 
     user = optional $ strOption
         ( long "user"
