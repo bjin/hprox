@@ -6,10 +6,10 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          # Read about caching dependencies: https://circleci.com/docs/2.0/caching/
           name: Restore Cached Dependencies
           keys:
-            - cci-hprox-v2-{{ checksum "stack.yaml" }}
+            - cci-hprox-v3-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+            - cci-hprox-v3-{{ checksum "stack.yaml" }}
       - run:
           name: Resolve/Update Dependencies
           command: stack setup
@@ -21,7 +21,7 @@ jobs:
           command: stack install
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-v2-{{ checksum "stack.yaml" }}
+          key: cci-hprox-v3-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
           paths:
             - "/root/.stack"
             - ".stack-work"
