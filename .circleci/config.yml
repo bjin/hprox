@@ -2,26 +2,29 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: fpco/stack-build:lts
+      - image: bjin/stack-docker:8.6.5
     steps:
       - checkout
       - restore_cache:
           name: Restore Cached Dependencies
           keys:
-            - cci-hprox-v3-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-            - cci-hprox-v3-{{ checksum "stack.yaml" }}
+            - cci-hprox-v4-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+            - cci-hprox-v4-{{ checksum "stack.yaml" }}
       - run:
-          name: Resolve/Update Dependencies
-          command: stack setup
-      - run:
-          name: workaround for OOM (build http-reverse-proxy first)
-          command: stack build http-reverse-proxy
+          name: Workaround for OOM (build http-reverse-proxy first)
+          command: stack build http-reverse-proxy --flag hprox:static
       - run:
           name: Install executable
-          command: stack install
+          command: stack install --flag hprox:static
+      - run:
+          name: Package executable
+          command: mkdir ~/release && tar czvf ~/release/hprox-$(stack query locals hprox version)-$(git rev-parse --short HEAD)-linux-x86_64-static.tar.gz -C ~/.local/bin hprox
+      - store_artifacts:
+          path: ~/release
+          destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-v3-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+          key: cci-hprox-v4-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
           paths:
-            - "/root/.stack"
-            - ".stack-work"
+            - ~/.stack
+            - .stack-work
