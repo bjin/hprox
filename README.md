@@ -32,6 +32,8 @@ stack setup
 stack install
 ```
 
+Alternatively, you also can use the statically linked binary for the [latest release](https://github.com/bjin/hprox/releases).
+
 ### Usage
 
 Use `hprox --help` to list options with detailed explanation.
