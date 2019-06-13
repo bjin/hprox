@@ -1,5 +1,5 @@
 name:                hprox
-version:             0.1.0.1
+version:             0.1.0.2
 github:              "bjin/hprox"
 license:             Apache-2.0
 author:              "Bin Jin"
@@ -16,22 +16,22 @@ extra-source-files:
 - README.md
 
 dependencies:
-- async
-- base >= 4.7 && < 5
-- base64-bytestring
-- binary
-- bytestring
-- case-insensitive
-- conduit
-- conduit-extra
-- http-client
+- async >= 2.2
+- base >= 4.12 && < 5
+- base64-bytestring >= 1.0
+- binary >= 0.8
+- bytestring >= 0.10
+- case-insensitive >= 1.2
+- conduit >= 1.3
+- conduit-extra >= 1.3
+- http-client >= 0.5
 - http-reverse-proxy >= 0.4.0
-- http-types
-- optparse-applicative
-- tls >= 1.5.0
-- unix
+- http-types >= 0.12
+- optparse-applicative >= 0.14
+- tls >= 1.5
+- unix >= 2.7
 - wai >= 3.2.2
-- wai-extra
+- wai-extra >= 3.0
 - warp >= 3.2.8
 - warp-tls >= 3.2.5
 
@@ -48,6 +48,10 @@ ghc-options:
 - -rtsopts
 - -with-rtsopts=-N
 
+when:
+- condition: flag(static)
+  ghc-options: -optl-static
+
 executables:
   hprox:
     main:                Main.hs
@@ -55,6 +59,3 @@ executables:
     - src
     other-modules:
     - HProx
-    when:
-    - condition: flag(static)
-      ghc-options: -optl-static
