@@ -12,7 +12,7 @@
 
 * Basic HTTP proxy functionality.
 * Simple password authentication.
-* TLS encryption (requires a valid certificate). Supports TLS 1.3 and HTTP 2, also known as SPDY Proxy.
+* TLS encryption (requires a valid certificate). Supports TLS 1.3 and HTTP/2, also known as SPDY Proxy.
 * TLS SNI validation (blocks all clients with invalid domain name).
 * Provide PAC file for easy client side configuration (supports Chrome and Firefox).
 * Websocket redirection (compatible with [v2ray-plugin](https://github.com/shadowsocks/v2ray-plugin)).
