@@ -93,54 +93,10 @@ parseHostPortWithDefault defaultPort hostPort =
     fromMaybe (hostPort, defaultPort) $ parseHostPort hostPort
 
 isProxyHeader :: HT.HeaderName -> Bool
-isProxyHeader k
-    | BS.length bs <= 4     = False
-    | c0 /= 112 && c0 /= 80 = False -- 'p'
-    | c1 /= 114 && c1 /= 82 = False -- 'r'
-    | c2 /= 111 && c2 /= 79 = False -- 'o'
-    | c3 /= 120 && c3 /= 88 = False -- 'x'
-    | c4 /= 121 && c4 /= 89 = False -- 'y'
-    | otherwise             = True
-  where
-    bs = CI.original k
-    idx = BS.index bs
-
-    c0 = idx 0
-    c1 = idx 1
-    c2 = idx 2
-    c3 = idx 3
-    c4 = idx 4
+isProxyHeader k = "proxy" `BS.isPrefixOf` CI.foldedCase k
 
 isForwardedHeader :: HT.HeaderName -> Bool
-isForwardedHeader k
-    | BS.length bs <= 10    = False
-    | c0 /= 120 && c0 /= 88 = False -- 'x'
-    | c1 /= 45              = False -- '-'
-    | c2 /= 102 && c2 /= 70 = False -- 'f'
-    | c3 /= 111 && c3 /= 79 = False -- 'o'
-    | c4 /= 114 && c4 /= 82 = False -- 'r'
-    | c5 /= 119 && c5 /= 87 = False -- 'w'
-    | c6 /= 97  && c6 /= 65 = False -- 'a'
-    | c7 /= 114 && c7 /= 82 = False -- 'r'
-    | c8 /= 100 && c8 /= 68 = False -- 'd'
-    | c9 /= 101 && c9 /= 69 = False -- 'e'
-    | ca /= 100 && ca /= 68 = False -- 'd'
-    | otherwise             = True
-  where
-    bs = CI.original k
-    idx = BS.index bs
-
-    c0 = idx 0
-    c1 = idx 1
-    c2 = idx 2
-    c3 = idx 3
-    c4 = idx 4
-    c5 = idx 5
-    c6 = idx 6
-    c7 = idx 7
-    c8 = idx 8
-    c9 = idx 9
-    ca = idx 10
+isForwardedHeader k = "x-forwarded" `BS.isPrefixOf` CI.foldedCase k
 
 isToStripHeader :: HT.HeaderName -> Bool
 isToStripHeader h = isProxyHeader h || isForwardedHeader h || h == "X-Real-IP" || h == "X-Scheme"
