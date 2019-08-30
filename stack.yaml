@@ -4,7 +4,7 @@ packages:
 extra-deps:
 - tls-1.5.0
 - github: bjin/wai
-  commit: 41a53c56d28c82a048e8f743cd505e22218a04d9
+  commit: 57f03dd8d5e20c7d87f1a8990e3beafb47313364 # warp-3.2.28
   subdirs:
   - warp
 flags: {}
