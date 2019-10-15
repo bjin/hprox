@@ -1,10 +1,9 @@
-resolver: lts-14.3
+resolver: nightly-2019-10-15
 packages:
 - '.'
 extra-deps:
-- tls-1.5.0
 - github: bjin/wai
-  commit: 57f03dd8d5e20c7d87f1a8990e3beafb47313364 # warp-3.2.28
+  commit: warp-3.3.3-patched
   subdirs:
   - warp
 flags: {}
