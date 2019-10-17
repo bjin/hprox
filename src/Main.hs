@@ -22,10 +22,12 @@ import           System.Posix.User           (UserEntry (..),
 
 import           Data.Maybe
 import           Data.Monoid                 ((<>))
+import           Data.Version                (showVersion)
 import           Options.Applicative
 
 import           HProx                       (ProxySettings (..), dumbApp,
                                               forceSSL, httpProxy, reverseProxy)
+import           Paths_hprox                 (version)
 
 data Opts = Opts
   { _bind :: Maybe HostPreference
@@ -52,11 +54,14 @@ splitBy c (x:xs)
   | otherwise = let y:ys = splitBy c xs in (x:y):ys
 
 parser :: ParserInfo Opts
-parser = info (helper <*> opts) fullDesc
+parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
   where
     parseSSL s = case splitBy ':' s of
         [host, cert, key] -> Right (host, CertFile cert key)
         _                 -> Left "invalid format for ssl certificates"
+
+    desc = "a lightweight HTTP proxy server, and more"
+    ver = infoOption (showVersion version) (long "version" <> help "show version")
 
     opts = Opts <$> bind
                 <*> (fromMaybe 3000 <$> port)

@@ -60,3 +60,4 @@ executables:
     - src
     other-modules:
     - HProx
+    - Paths_hprox
