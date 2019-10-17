@@ -64,7 +64,6 @@ Clients will be able to connect with plugin option `tls;host=example.com`.
 
 ### Known Issue
 
-* Only HTTP servers are supported as websocket and reverse proxy redirection destination.
 * Passwords are currently stored in plain text, please set permission accordingly and
   avoid using existing password.
 

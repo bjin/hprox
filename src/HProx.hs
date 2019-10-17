@@ -149,8 +149,9 @@ reverseProxy pset mgr fallback
 
     isReverseProxy = isJust (revRemote pset)
     (revHost, revPort) = parseHostPortWithDefault 80 (fromJust (revRemote pset))
+    revWrapper = if revPort == 443 then WPRModifiedRequestSecure else WPRModifiedRequest
 
-    proxyResponseFor req = WPRModifiedRequest nreq (ProxyDest revHost revPort)
+    proxyResponseFor req = revWrapper nreq (ProxyDest revHost revPort)
       where
         nreq = req
           { requestHeaders = hdrs
@@ -168,7 +169,7 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
-        | redirectWebsocket  = WPRProxyDest (ProxyDest wsHost wsPort)
+        | redirectWebsocket  = wsWrapper (ProxyDest wsHost wsPort)
         | not isGetProxy     = WPRApplication fallback
         | checkAuth pset req = WPRModifiedRequest nreq (ProxyDest host port)
         | otherwise          = WPRResponse (proxyAuthRequiredResponse pset)
@@ -176,6 +177,7 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
         isWebsocket = wpsUpgradeToRaw defaultWaiProxySettings req
         redirectWebsocket = isWebsocket && isJust (wsRemote pset)
         (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust (wsRemote pset))
+        wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
 
         notCONNECT = requestMethod req /= "CONNECT"
         rawPath = rawPathInfo req

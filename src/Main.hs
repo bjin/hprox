@@ -7,7 +7,7 @@ module Main where
 
 import qualified Data.ByteString.Char8       as BS8
 import           Data.String                 (fromString)
-import qualified Network.HTTP.Client         as HC
+import           Network.HTTP.Client.TLS     (newTlsManager)
 import           Network.TLS                 as TLS
 import           Network.Wai.Handler.Warp    (HostPreference, defaultSettings,
                                               runSettings, setBeforeMainLoop,
@@ -98,13 +98,13 @@ parser = info (helper <*> opts) fullDesc
 
     ws = optional $ strOption
         ( long "ws"
-       <> metavar "remote-host:80"
-       <> help "remote host to handle websocket requests (HTTP server only)")
+       <> metavar "remote-host:port"
+       <> help "remote host to handle websocket requests (port 443 indicates HTTPS remote server)")
 
     rev = optional $ strOption
         ( long "rev"
-       <> metavar "remote-host:80"
-       <> help "remote host for reverse proxy (HTTP server only)")
+       <> metavar "remote-host:port"
+       <> help "remote host for reverse proxy (port 443 indicates HTTPS remote server)")
 
 
 setuid :: String -> IO ()
@@ -144,7 +144,7 @@ main = do
     pauth <- case _auth opts of
         Nothing -> return Nothing
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
-    manager <- HC.newManager HC.defaultManagerSettings
+    manager <- newTlsManager
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts) (BS8.pack <$> _rev opts)
         proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
