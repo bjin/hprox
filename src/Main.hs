@@ -152,7 +152,7 @@ main = do
     manager <- newTlsManager
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts) (BS8.pack <$> _rev opts)
-        proxy = (if isSSL then forceSSL else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
+        proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
         port = _port opts
 
     runner (setHost (fromMaybe "*6" (_bind opts)) $ setPort port settings) proxy

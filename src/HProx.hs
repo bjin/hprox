@@ -62,10 +62,11 @@ dumbApp _req respond =
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
 httpProxy set mgr = pacProvider . httpGetProxy set mgr . httpConnectProxy set
 
-forceSSL :: Middleware
-forceSSL app req respond
-    | isSecure req = app req respond
-    | otherwise    = redirectToSSL req respond
+forceSSL :: ProxySettings -> Middleware
+forceSSL pset app req respond
+    | isSecure req               = app req respond
+    | redirectWebsocket pset req = app req respond
+    | otherwise                  = redirectToSSL req respond
 
 redirectToSSL :: Application
 redirectToSSL req respond
@@ -111,6 +112,9 @@ checkAuth pset req
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
 
     decodedRsp = decodeLenient $ snd $ BS8.spanEnd (/=' ') $ fromJust authRsp
+
+redirectWebsocket :: ProxySettings -> Request -> Bool
+redirectWebsocket pset req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust (wsRemote pset)
 
 proxyAuthRequiredResponse :: ProxySettings -> Response
 proxyAuthRequiredResponse pset = responseLBS
@@ -169,13 +173,11 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
-        | redirectWebsocket  = wsWrapper (ProxyDest wsHost wsPort)
-        | not isGetProxy     = WPRApplication fallback
-        | checkAuth pset req = WPRModifiedRequest nreq (ProxyDest host port)
-        | otherwise          = WPRResponse (proxyAuthRequiredResponse pset)
+        | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
+        | not isGetProxy             = WPRApplication fallback
+        | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
+        | otherwise                  = WPRResponse (proxyAuthRequiredResponse pset)
       where
-        isWebsocket = wpsUpgradeToRaw defaultWaiProxySettings req
-        redirectWebsocket = isWebsocket && isJust (wsRemote pset)
         (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust (wsRemote pset))
         wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
 
