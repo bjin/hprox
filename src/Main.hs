@@ -2,6 +2,7 @@
 --
 -- Copyright (C) 2019 Bin Jin. All Rights Reserved.
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
@@ -117,9 +118,9 @@ setuid user = getUserEntryForName user >>= setUserID . userID
 
 main :: IO ()
 main = do
-    opts <- execParser parser
+    Opts{..} <- execParser parser
 
-    let certfiles = _ssl opts
+    let certfiles = _ssl
     certs <- mapM (readCert.snd) certfiles
 
     let isSSL = not (null certfiles)
@@ -128,7 +129,7 @@ main = do
 
         settings = setNoParsePath True $
                    setServerName "Apache" $
-                   maybe id (setBeforeMainLoop . setuid) (_user opts)
+                   maybe id (setBeforeMainLoop . setuid) _user
                    defaultSettings
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
@@ -146,13 +147,13 @@ main = do
         runner | isSSL     = runTLS tlsset
                | otherwise = runSettings
 
-    pauth <- case _auth opts of
+    pauth <- case _auth of
         Nothing -> return Nothing
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws opts) (BS8.pack <$> _rev opts)
+    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev)
         proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
-        port = _port opts
+        port = _port
 
-    runner (setHost (fromMaybe "*6" (_bind opts)) $ setPort port settings) proxy
+    runner (setHost (fromMaybe "*6" _bind) $ setPort port settings) proxy

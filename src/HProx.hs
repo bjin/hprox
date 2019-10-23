@@ -2,6 +2,7 @@
 --
 -- Copyright (C) 2019 Bin Jin. All Rights Reserved.
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module HProx
   ( ProxySettings(..)
@@ -103,26 +104,25 @@ isToStripHeader :: HT.HeaderName -> Bool
 isToStripHeader h = isProxyHeader h || isForwardedHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
 checkAuth :: ProxySettings -> Request -> Bool
-checkAuth pset req
-    | isNothing pauth   = True
-    | isNothing authRsp = False
-    | otherwise         = fromJust pauth decodedRsp
+checkAuth ProxySettings{..} req
+    | isNothing proxyAuth = True
+    | isNothing authRsp   = False
+    | otherwise           = fromJust proxyAuth decodedRsp
   where
-    pauth = proxyAuth pset
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
 
     decodedRsp = decodeLenient $ snd $ BS8.spanEnd (/=' ') $ fromJust authRsp
 
 redirectWebsocket :: ProxySettings -> Request -> Bool
-redirectWebsocket pset req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust (wsRemote pset)
+redirectWebsocket ProxySettings{..} req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust wsRemote
 
 proxyAuthRequiredResponse :: ProxySettings -> Response
-proxyAuthRequiredResponse pset = responseLBS
+proxyAuthRequiredResponse ProxySettings{..} = responseLBS
     HT.status407
     [(HT.hProxyAuthenticate, "Basic realm=\"" `BS.append` prompt `BS.append` "\"")]
     ""
   where
-    prompt = fromMaybe "hprox" (passPrompt pset)
+    prompt = fromMaybe "hprox" passPrompt
 
 pacProvider :: Middleware
 pacProvider fallback req respond
@@ -145,14 +145,14 @@ pacProvider fallback req respond
     | otherwise = fallback req respond
 
 reverseProxy :: ProxySettings -> HC.Manager -> Middleware
-reverseProxy pset mgr fallback
+reverseProxy ProxySettings{..} mgr fallback
     | isReverseProxy = waiProxyToSettings (return.proxyResponseFor) settings mgr
     | otherwise      = fallback
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
-    isReverseProxy = isJust (revRemote pset)
-    (revHost, revPort) = parseHostPortWithDefault 80 (fromJust (revRemote pset))
+    isReverseProxy = isJust revRemote
+    (revHost, revPort) = parseHostPortWithDefault 80 (fromJust revRemote)
     revWrapper = if revPort == 443 then WPRModifiedRequestSecure else WPRModifiedRequest
 
     proxyResponseFor req = revWrapper nreq (ProxyDest revHost revPort)
@@ -168,7 +168,7 @@ reverseProxy pset mgr fallback
                                      ]
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
-httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
+httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
@@ -178,7 +178,7 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
         | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
         | otherwise                  = WPRResponse (proxyAuthRequiredResponse pset)
       where
-        (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust (wsRemote pset))
+        (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust wsRemote)
         wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
 
         notCONNECT = requestMethod req /= "CONNECT"
@@ -207,7 +207,7 @@ httpGetProxy pset mgr fallback = waiProxyToSettings (return.proxyResponseFor) se
                 BS.drop (BS.length rawPathPrefix) rawPath
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset fallback req respond
+httpConnectProxy pset@ProxySettings{..} fallback req respond
     | not isConnectProxy = fallback req respond
     | checkAuth pset req = respond response
     | otherwise          = respond (proxyAuthRequiredResponse pset)
