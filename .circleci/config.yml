@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: bjin/stack-docker:8.8.2
+      - image: bjin/stack-docker:8.8.3
     steps:
       - checkout
       - restore_cache:
