@@ -1,9 +1,9 @@
-resolver: lts-15.7
+resolver: nightly-2020-06-18
 packages:
 - '.'
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.3.9-patched
+  commit: warp-3.3.12-patched
   subdirs:
   - warp
 flags: {}
