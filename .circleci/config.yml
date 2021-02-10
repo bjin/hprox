@@ -18,7 +18,7 @@ jobs:
           command: stack install --flag hprox:static
       - run:
           name: Package executable
-          command: mkdir ~/release && tar czvf ~/release/hprox-$(stack query locals hprox version)-$(git rev-parse --short HEAD)-linux-x86_64-static.tar.gz -C ~/.local/bin hprox
+          command: mkdir ~/release && tar czvf ~/release/hprox-$(stack query locals hprox version | tr -d -C "0-9.")-$(git rev-parse --short HEAD)-linux-x86_64-static.tar.gz -C ~/.local/bin hprox
       - store_artifacts:
           path: ~/release
           destination: release
