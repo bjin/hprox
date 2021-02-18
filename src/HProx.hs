@@ -2,7 +2,7 @@
 --
 -- Copyright (C) 2019 Bin Jin. All Rights Reserved.
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module HProx
   ( ProxySettings(..)
@@ -37,7 +37,6 @@ import           Network.HTTP.ReverseProxy  (ProxyDest (..), SetIpHeader (..),
                                              wpsUpgradeToRaw)
 import qualified Network.HTTP.Types         as HT
 import qualified Network.HTTP.Types.Header  as HT
-import           Network.Wai.Internal       (getRequestBodyChunk)
 
 import           Data.Conduit
 import           Network.Wai
@@ -207,7 +206,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
                 BS.drop (BS.length rawPathPrefix) rawPath
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset@ProxySettings{..} fallback req respond
+httpConnectProxy pset fallback req respond
     | not isConnectProxy = fallback req respond
     | checkAuth pset req = respond response
     | otherwise          = respond (proxyAuthRequiredResponse pset)

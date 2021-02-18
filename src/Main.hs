@@ -2,7 +2,7 @@
 --
 -- Copyright (C) 2019 Bin Jin. All Rights Reserved.
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
@@ -22,7 +22,6 @@ import           System.Posix.User           (UserEntry (..),
                                               getUserEntryForName, setUserID)
 
 import           Data.Maybe
-import           Data.Monoid                 ((<>))
 import           Data.Version                (showVersion)
 import           Options.Applicative
 
