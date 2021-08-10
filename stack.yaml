@@ -1,9 +1,9 @@
-resolver: lts-17.4
+resolver: lts-18.5
 packages:
 - '.'
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.3.14-patched
+  commit: warp-3.3.17-patched
   subdirs:
   - warp
 flags: {}
