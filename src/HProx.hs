@@ -41,6 +41,8 @@ import qualified Network.HTTP.Types.Header  as HT
 import           Data.Conduit
 import           Network.Wai
 
+import           Util
+
 data ProxySettings = ProxySettings
   { proxyAuth  :: Maybe (BS.ByteString -> Bool)
   , passPrompt :: Maybe BS.ByteString
@@ -79,19 +81,6 @@ redirectToSSL req respond
         [("Upgrade", "TLS/1.0, HTTP/1.1"), ("Connection", "Upgrade")]
         ""
 
-parseHostPort :: BS.ByteString -> Maybe (BS.ByteString, Int)
-parseHostPort hostPort = do
-    lastColon <- BS8.elemIndexEnd ':' hostPort
-    port <- BS8.readInt (BS.drop (lastColon+1) hostPort) >>= checkPort
-    return (BS.take lastColon hostPort, port)
-  where
-    checkPort (p, bs)
-        | BS.null bs && 1 <= p && p <= 65535 = Just p
-        | otherwise                          = Nothing
-
-parseHostPortWithDefault :: Int -> BS.ByteString -> (BS.ByteString, Int)
-parseHostPortWithDefault defaultPort hostPort =
-    fromMaybe (hostPort, defaultPort) $ parseHostPort hostPort
 
 isProxyHeader :: HT.HeaderName -> Bool
 isProxyHeader k = "proxy" `BS.isPrefixOf` CI.foldedCase k

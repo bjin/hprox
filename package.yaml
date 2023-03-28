@@ -18,12 +18,13 @@ extra-source-files:
 dependencies:
 - async >= 2.2
 - base >= 4.12 && < 5
-- base64-bytestring >= 1.0
+- base64-bytestring >= 1.1
 - binary >= 0.8
 - bytestring >= 0.10
 - case-insensitive >= 1.2
 - conduit >= 1.3
 - conduit-extra >= 1.3
+- dns >= 4.0
 - http-client >= 0.5
 - http-client-tls >= 0.3.4
 - http-reverse-proxy >= 0.4.0
@@ -59,5 +60,7 @@ executables:
     source-dirs:
     - src
     other-modules:
+    - DoH
     - HProx
     - Paths_hprox
+    - Util

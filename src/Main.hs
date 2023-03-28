@@ -25,6 +25,7 @@ import           Data.Maybe
 import           Data.Version                (showVersion)
 import           Options.Applicative
 
+import           DoH
 import           HProx                       (ProxySettings (..), dumbApp,
                                               forceSSL, httpProxy, reverseProxy)
 import           Paths_hprox                 (version)
@@ -37,6 +38,7 @@ data Opts = Opts
   , _auth :: Maybe FilePath
   , _ws   :: Maybe String
   , _rev  :: Maybe String
+  , _doh  :: Maybe String
   }
 
 data CertFile = CertFile
@@ -70,6 +72,7 @@ parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
                 <*> auth
                 <*> ws
                 <*> rev
+                <*> doh
 
     bind = optional $ fromString <$> strOption
         ( long "bind"
@@ -111,6 +114,11 @@ parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
        <> metavar "remote-host:port"
        <> help "remote host for reverse proxy (port 443 indicates HTTPS remote server)")
 
+    doh = optional $ strOption
+        ( long "doh"
+       <> metavar "dns-server:port"
+       <> help "enable doh (dns-over-https) support")
+
 
 setuid :: String -> IO ()
 setuid user = getUserEntryForName user >>= setUserID . userID
@@ -126,7 +134,9 @@ main = do
         (primaryHost, primaryCert) = head certfiles
         otherCerts = tail $ zip (map fst certfiles) certs
 
-        settings = setNoParsePath True $
+        settings = setHost (fromMaybe "*6" _bind) $
+                   setPort _port $
+                   setNoParsePath True $
                    setServerName "Apache" $
                    maybe id (setBeforeMainLoop . setuid) _user
                    defaultSettings
@@ -153,6 +163,7 @@ main = do
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev)
         proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
-        port = _port
 
-    runner (setHost (fromMaybe "*6" _bind) $ setPort port settings) proxy
+    case _doh of
+        Nothing  -> runner settings proxy
+        Just doh -> createResolver doh (\resolver -> runner settings (dnsOverHTTPS resolver proxy))

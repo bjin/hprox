@@ -17,6 +17,7 @@
 * Provide PAC file for easy client side configuration (supports Chrome and Firefox).
 * Websocket redirection (compatible with [v2ray-plugin](https://github.com/shadowsocks/v2ray-plugin)).
 * Reverse proxy support (redirect requests to a fallback server).
+* DNS-over-HTTPS (DoH) support.
 * Implemented as a middleware, compatible with any Haskell Web Application built with `wai` interface.
   Defaults to fallback to a dumb application which simulate the default empty page from Apache.
 
