@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
--- Copyright (C) 2019 Bin Jin. All Rights Reserved.
+-- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -118,7 +118,7 @@ parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
     doh = optional $ strOption
         ( long "doh"
        <> metavar "dns-server:port"
-       <> help "enable doh (dns-over-https) support")
+       <> help "enable DNS-over-HTTPS(DoH) support (53 will be used if port is not specified)")
 
 
 setuid :: String -> IO ()

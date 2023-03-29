@@ -1,10 +1,10 @@
 name:                hprox
-version:             0.1.2
+version:             0.2.0
 github:              "bjin/hprox"
 license:             Apache-2.0
 author:              "Bin Jin"
 maintainer:          "bjin@ctrl-d.org"
-copyright:           "2019 Bin Jin"
+copyright:           "2023 Bin Jin"
 
 synopsis:            a lightweight HTTP proxy server, and more
 category:            Web
