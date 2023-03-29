@@ -12,7 +12,8 @@ import           Network.HTTP.Client.TLS     (newTlsManager)
 import           Network.TLS                 as TLS
 import           Network.Wai.Handler.Warp    (HostPreference, defaultSettings,
                                               runSettings, setBeforeMainLoop,
-                                              setHost, setNoParsePath, setPort,
+                                              setHost, setNoParsePath,
+                                              setOnException, setPort,
                                               setServerName)
 import           Network.Wai.Handler.WarpTLS (OnInsecure (..), onInsecure,
                                               runTLS, tlsServerHooks,
@@ -136,6 +137,7 @@ main = do
 
         settings = setHost (fromMaybe "*6" _bind) $
                    setPort _port $
+                   setOnException (\_ _ -> return ()) $
                    setNoParsePath True $
                    setServerName "Apache" $
                    maybe id (setBeforeMainLoop . setuid) _user
@@ -145,12 +147,11 @@ main = do
         hooks = (tlsServerHooks tlsset') { onServerNameIndication = onSNI }
         tlsset = tlsset' { tlsServerHooks = hooks, onInsecure = AllowInsecure }
 
-        failSNI = fail "SNI" >> return mempty
-        onSNI Nothing = failSNI
+        onSNI Nothing = fail "SNI: unspecified"
         onSNI (Just host)
           | host == primaryHost = return mempty
           | otherwise           = case lookup host otherCerts of
-              Nothing   -> failSNI
+              Nothing   -> fail ("SNI: unknown hostname (" ++ show host ++ ")")
               Just cert -> return (TLS.Credentials [cert])
 
         runner | isSSL     = runTLS tlsset
