@@ -7,6 +7,7 @@
 module Main where
 
 import qualified Data.ByteString.Char8       as BS8
+import           Data.List                   (isSuffixOf)
 import           Data.String                 (fromString)
 import           Network.HTTP.Client.TLS     (newTlsManager)
 import           Network.TLS                 as TLS
@@ -149,10 +150,17 @@ main = do
 
         onSNI Nothing = fail "SNI: unspecified"
         onSNI (Just host)
-          | host == primaryHost = return mempty
-          | otherwise           = case lookup host otherCerts of
-              Nothing   -> fail ("SNI: unknown hostname (" ++ show host ++ ")")
-              Just cert -> return (TLS.Credentials [cert])
+          | checkSNI host primaryHost = return mempty
+          | otherwise                 = lookupSNI host otherCerts
+
+        lookupSNI host [] = fail ("SNI: unknown hostname (" ++ show host ++ ")")
+        lookupSNI host ((p, cert) : cs)
+          | checkSNI host p = return (TLS.Credentials [cert])
+          | otherwise       = lookupSNI host cs
+
+        checkSNI host pattern = case pattern of
+            '*' : '.' : p -> ('.' : p) `isSuffixOf` host
+            p             -> host == p
 
         runner | isSSL     = runTLS tlsset
                | otherwise = runSettings

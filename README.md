@@ -67,7 +67,6 @@ Clients will be able to connect with plugin option `tls;host=example.com`.
 
 * Passwords are currently stored in plain text, please set permission accordingly and
   avoid using existing password.
-* Wildcard certificates are NOT supported at this moment.
 
 ### License
 
