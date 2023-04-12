@@ -16,32 +16,39 @@ module Network.HProx
   , run
   ) where
 
-import qualified Data.ByteString.Char8       as BS8
-import           Data.List                   (isSuffixOf)
-import           Data.String                 (fromString)
-import           Network.HTTP.Client.TLS     (newTlsManager)
-import           Network.TLS                 as TLS
-import           Network.Wai                 (Application)
-import           Network.Wai.Handler.Warp    (HostPreference, defaultSettings,
-                                              runSettings, setBeforeMainLoop,
-                                              setHost, setNoParsePath,
-                                              setOnException, setPort,
-                                              setServerName)
-import           Network.Wai.Handler.WarpTLS (OnInsecure (..), onInsecure,
-                                              runTLS, tlsServerHooks,
-                                              tlsSettings)
-import           Network.Wai.Middleware.Gzip (def, gzip)
-import           System.Posix.User           (UserEntry (..),
-                                              getUserEntryForName, setUserID)
+import qualified Data.ByteString.Char8               as BS8
+import           Data.List                           (isSuffixOf)
+import           Data.String                         (fromString)
+import           Network.HTTP.Client.TLS             (newTlsManager)
+import           Network.TLS                         as TLS
+import           Network.Wai                         (Application,
+                                                      modifyResponse)
+import           Network.Wai.Handler.Warp            (HostPreference,
+                                                      defaultSettings,
+                                                      runSettings,
+                                                      setBeforeMainLoop,
+                                                      setHost, setNoParsePath,
+                                                      setOnException, setPort,
+                                                      setServerName)
+import           Network.Wai.Handler.WarpTLS         (OnInsecure (..),
+                                                      onInsecure, runTLS,
+                                                      tlsServerHooks,
+                                                      tlsSettings)
+import           Network.Wai.Middleware.Gzip         (def, gzip)
+import           Network.Wai.Middleware.StripHeaders (stripHeaders)
+import           System.Posix.User                   (UserEntry (..),
+                                                      getUserEntryForName,
+                                                      setUserID)
 
 import           Data.Maybe
-import           Data.Version                (showVersion)
+import           Data.Version                        (showVersion)
 import           Options.Applicative
 
 import           Network.HProx.DoH
-import           Network.HProx.Impl          (ProxySettings (..), forceSSL,
-                                              httpProxy, reverseProxy)
-import           Paths_hprox                 (version)
+import           Network.HProx.Impl                  (ProxySettings (..),
+                                                      forceSSL, httpProxy,
+                                                      reverseProxy)
+import           Paths_hprox                         (version)
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
@@ -194,7 +201,11 @@ run fallback Config{..} = do
     manager <- newTlsManager
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev)
-        proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager fallback
+        proxy = (if isSSL then forceSSL pset else id) $
+                modifyResponse (stripHeaders ["Server", "Date"]) $
+                gzip def $
+                httpProxy pset manager $
+                reverseProxy pset manager fallback
 
     case _doh of
         Nothing  -> runner settings proxy
