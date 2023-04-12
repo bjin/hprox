@@ -44,6 +44,11 @@ flags:
     manual: true
     default: false
 
+default-extensions:
+- ImportQualifiedPost
+- OverloadedStrings
+- RecordWildCards
+
 ghc-options:
 - -Wall
 - -Wcompat

@@ -1,26 +1,23 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 module Network.HProx.DoH
   ( createResolver
   , dnsOverHTTPS
   ) where
 
-import qualified Data.ByteString.Base64.URL as Base64
-import qualified Data.ByteString.Char8      as BS8
-import qualified Data.ByteString.Lazy       as LBS
-import           Network.DNS                (DNSHeader (..), DNSMessage (..),
-                                             Question (..), ResolvConf (..),
-                                             Resolver)
-import qualified Network.DNS                as DNS
-import qualified Network.HTTP.Types         as HT
+import Data.ByteString.Base64.URL qualified as Base64
+import Data.ByteString.Char8      qualified as BS8
+import Data.ByteString.Lazy       qualified as LBS
+import Network.DNS
+    (DNSHeader (..), DNSMessage (..), Question (..), ResolvConf (..), Resolver)
+import Network.DNS                qualified as DNS
+import Network.HTTP.Types         qualified as HT
 
-import           Network.Wai
+import Network.Wai
 
-import           Network.HProx.Util
+import Network.HProx.Util
 
 createResolver :: String -> (Resolver -> IO a) -> IO a
 createResolver remote handle = do

@@ -1,46 +1,42 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 module Network.HProx.Impl
-  ( ProxySettings(..)
+  ( ProxySettings (..)
+  , forceSSL
+  , httpConnectProxy
+  , httpGetProxy
   , httpProxy
   , pacProvider
-  , httpGetProxy
-  , httpConnectProxy
   , reverseProxy
-  , forceSSL
   ) where
 
-import           Control.Applicative        ((<|>))
-import           Control.Concurrent.Async   (concurrently)
-import           Control.Exception          (SomeException, try)
-import           Control.Monad              (unless, void, when)
-import           Control.Monad.IO.Class     (liftIO)
-import qualified Data.Binary.Builder        as BB
-import qualified Data.ByteString            as BS
-import           Data.ByteString.Base64     (decodeLenient)
-import qualified Data.ByteString.Char8      as BS8
-import qualified Data.ByteString.Lazy.Char8 as LBS8
-import qualified Data.CaseInsensitive       as CI
-import qualified Data.Conduit.Network       as CN
-import           Data.Maybe                 (fromJust, fromMaybe, isJust,
-                                             isNothing)
-import qualified Network.HTTP.Client        as HC
-import           Network.HTTP.ReverseProxy  (ProxyDest (..), SetIpHeader (..),
-                                             WaiProxyResponse (..),
-                                             defaultWaiProxySettings,
-                                             waiProxyToSettings, wpsSetIpHeader,
-                                             wpsUpgradeToRaw)
-import qualified Network.HTTP.Types         as HT
-import qualified Network.HTTP.Types.Header  as HT
+import Control.Applicative        ((<|>))
+import Control.Concurrent.Async   (concurrently)
+import Control.Exception          (SomeException, try)
+import Control.Monad              (unless, void, when)
+import Control.Monad.IO.Class     (liftIO)
+import Data.Binary.Builder        qualified as BB
+import Data.ByteString            qualified as BS
+import Data.ByteString.Base64     (decodeLenient)
+import Data.ByteString.Char8      qualified as BS8
+import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Data.CaseInsensitive       qualified as CI
+import Data.Conduit.Network       qualified as CN
+import Network.HTTP.Client        qualified as HC
+import Network.HTTP.ReverseProxy
+    (ProxyDest (..), SetIpHeader (..), WaiProxyResponse (..),
+    defaultWaiProxySettings, waiProxyToSettings, wpsSetIpHeader,
+    wpsUpgradeToRaw)
+import Network.HTTP.Types         qualified as HT
+import Network.HTTP.Types.Header  qualified as HT
 
-import           Data.Conduit
-import           Network.Wai
+import Data.Conduit
+import Data.Maybe
+import Network.Wai
 
-import           Network.HProx.Util
+import Network.HProx.Util
 
 data ProxySettings = ProxySettings
   { proxyAuth  :: Maybe (BS.ByteString -> Bool)

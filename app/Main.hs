@@ -1,14 +1,16 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-{-# LANGUAGE OverloadedStrings #-}
-module Main (main) where
 
-import qualified Data.ByteString.Lazy.Char8 as LBS8
-import qualified Network.HTTP.Types         as HT
-import           Network.Wai
+module Main
+  ( main
+  ) where
 
-import           Network.HProx
+import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Network.HTTP.Types         qualified as HT
+import Network.Wai
+
+import Network.HProx
 
 dumbApp :: Application
 dumbApp _req respond =

@@ -1,54 +1,43 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 
 {-| Instead of running @hprox@ binary directly, you can use this library
     to run HProx in front of arbitrary WAI 'Application'.
 -}
 
 module Network.HProx
-  ( Config(..)
-  , CertFile(..)
+  ( CertFile (..)
+  , Config (..)
   , defaultConfig
   , getConfig
   , run
   ) where
 
-import qualified Data.ByteString.Char8               as BS8
-import           Data.List                           (isSuffixOf)
-import           Data.String                         (fromString)
-import           Network.HTTP.Client.TLS             (newTlsManager)
-import           Network.TLS                         as TLS
-import           Network.Wai                         (Application,
-                                                      modifyResponse)
-import           Network.Wai.Handler.Warp            (HostPreference,
-                                                      defaultSettings,
-                                                      runSettings,
-                                                      setBeforeMainLoop,
-                                                      setHost, setNoParsePath,
-                                                      setOnException, setPort,
-                                                      setServerName)
-import           Network.Wai.Handler.WarpTLS         (OnInsecure (..),
-                                                      onInsecure, runTLS,
-                                                      tlsServerHooks,
-                                                      tlsSettings)
-import           Network.Wai.Middleware.Gzip         (def, gzip)
-import           Network.Wai.Middleware.StripHeaders (stripHeaders)
-import           System.Posix.User                   (UserEntry (..),
-                                                      getUserEntryForName,
-                                                      setUserID)
+import Data.ByteString.Char8               qualified as BS8
+import Data.List                           (isSuffixOf)
+import Data.String                         (fromString)
+import Data.Version                        (showVersion)
+import Network.HTTP.Client.TLS             (newTlsManager)
+import Network.TLS                         qualified as TLS
+import Network.Wai                         (Application, modifyResponse)
+import Network.Wai.Handler.Warp
+    (HostPreference, defaultSettings, runSettings, setBeforeMainLoop, setHost,
+    setNoParsePath, setOnException, setPort, setServerName)
+import Network.Wai.Handler.WarpTLS
+    (OnInsecure (..), onInsecure, runTLS, tlsServerHooks, tlsSettings)
+import Network.Wai.Middleware.Gzip         (def, gzip)
+import Network.Wai.Middleware.StripHeaders (stripHeaders)
+import System.Posix.User
+    (UserEntry (..), getUserEntryForName, setUserID)
 
-import           Data.Maybe
-import           Data.Version                        (showVersion)
-import           Options.Applicative
+import Data.Maybe
+import Options.Applicative
 
-import           Network.HProx.DoH
-import           Network.HProx.Impl                  (ProxySettings (..),
-                                                      forceSSL, httpProxy,
-                                                      reverseProxy)
-import           Paths_hprox                         (version)
+import Network.HProx.DoH
+import Network.HProx.Impl
+    (ProxySettings (..), forceSSL, httpProxy, reverseProxy)
+import Paths_hprox        (version)
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
@@ -175,7 +164,7 @@ run fallback Config{..} = do
                    defaultSettings
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
-        hooks = (tlsServerHooks tlsset') { onServerNameIndication = onSNI }
+        hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
         tlsset = tlsset' { tlsServerHooks = hooks, onInsecure = AllowInsecure }
 
         onSNI Nothing = fail "SNI: unspecified"

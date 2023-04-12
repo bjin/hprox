@@ -1,14 +1,15 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
+
 module Network.HProx.Util
   ( parseHostPort
   , parseHostPortWithDefault
   ) where
 
-import qualified Data.ByteString       as BS
-import qualified Data.ByteString.Char8 as BS8
-import           Data.Maybe            (fromMaybe)
+import Data.ByteString       qualified as BS
+import Data.ByteString.Char8 qualified as BS8
+import Data.Maybe            (fromMaybe)
 
 parseHostPort :: BS.ByteString -> Maybe (BS.ByteString, Int)
 parseHostPort hostPort = do
