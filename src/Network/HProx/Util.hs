@@ -1,10 +1,10 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-module Util (
-    parseHostPort,
-    parseHostPortWithDefault
-) where
+module Network.HProx.Util
+  ( parseHostPort
+  , parseHostPortWithDefault
+  ) where
 
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS8

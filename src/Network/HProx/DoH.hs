@@ -4,10 +4,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module DoH (
-  createResolver,
-  dnsOverHTTPS
-) where
+module Network.HProx.DoH
+  ( createResolver
+  , dnsOverHTTPS
+  ) where
 
 import qualified Data.ByteString.Base64.URL as Base64
 import qualified Data.ByteString.Char8      as BS8
@@ -19,7 +19,8 @@ import qualified Network.DNS                as DNS
 import qualified Network.HTTP.Types         as HT
 
 import           Network.Wai
-import           Util
+
+import           Network.HProx.Util
 
 createResolver :: String -> (Resolver -> IO a) -> IO a
 createResolver remote handle = do

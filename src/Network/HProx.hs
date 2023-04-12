@@ -4,13 +4,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Main where
+{-| Instead of running @hprox@ binary directly, you can use this library
+    to run HProx in front of arbitrary WAI 'Application'.
+-}
+
+module Network.HProx
+  ( Config(..)
+  , CertFile(..)
+  , defaultConfig
+  , getConfig
+  , run
+  ) where
 
 import qualified Data.ByteString.Char8       as BS8
 import           Data.List                   (isSuffixOf)
 import           Data.String                 (fromString)
 import           Network.HTTP.Client.TLS     (newTlsManager)
 import           Network.TLS                 as TLS
+import           Network.Wai                 (Application)
 import           Network.Wai.Handler.Warp    (HostPreference, defaultSettings,
                                               runSettings, setBeforeMainLoop,
                                               setHost, setNoParsePath,
@@ -27,12 +38,13 @@ import           Data.Maybe
 import           Data.Version                (showVersion)
 import           Options.Applicative
 
-import           DoH
-import           HProx                       (ProxySettings (..), dumbApp,
-                                              forceSSL, httpProxy, reverseProxy)
+import           Network.HProx.DoH
+import           Network.HProx.Impl          (ProxySettings (..), forceSSL,
+                                              httpProxy, reverseProxy)
 import           Paths_hprox                 (version)
 
-data Opts = Opts
+-- | Configuration of HProx, see @hprox --help@ for details
+data Config = Config
   { _bind :: Maybe HostPreference
   , _port :: Int
   , _ssl  :: [(String, CertFile)]
@@ -43,6 +55,11 @@ data Opts = Opts
   , _doh  :: Maybe String
   }
 
+-- | Default value of 'Config', same as running @hprox@ without arguments
+defaultConfig :: Config
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing
+
+-- | Certificate file pairs
 data CertFile = CertFile
   { certfile :: FilePath
   , keyfile  :: FilePath
@@ -57,8 +74,8 @@ splitBy c (x:xs)
   | c == x    = [] : splitBy c xs
   | otherwise = let y:ys = splitBy c xs in (x:y):ys
 
-parser :: ParserInfo Opts
-parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
+parser :: ParserInfo Config
+parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
   where
     parseSSL s = case splitBy ':' s of
         [host, cert, key] -> Right (host, CertFile cert key)
@@ -67,14 +84,14 @@ parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
     desc = "a lightweight HTTP proxy server, and more"
     ver = infoOption (showVersion version) (long "version" <> help "show version")
 
-    opts = Opts <$> bind
-                <*> (fromMaybe 3000 <$> port)
-                <*> ssl
-                <*> user
-                <*> auth
-                <*> ws
-                <*> rev
-                <*> doh
+    config = Config <$> bind
+                    <*> (fromMaybe 3000 <$> port)
+                    <*> ssl
+                    <*> user
+                    <*> auth
+                    <*> ws
+                    <*> rev
+                    <*> doh
 
     bind = optional $ fromString <$> strOption
         ( long "bind"
@@ -125,9 +142,15 @@ parser = info (helper <*> ver <*> opts) (fullDesc <> progDesc desc)
 setuid :: String -> IO ()
 setuid user = getUserEntryForName user >>= setUserID . userID
 
-main :: IO ()
-main = do
-    Opts{..} <- execParser parser
+-- | Read 'Config' from command line arguments
+getConfig :: IO Config
+getConfig = execParser parser
+
+-- | Run HProx in front of fallback 'Application', with specified 'Config'
+run :: Application -- ^ fallback application
+    -> Config      -- ^ configuration
+    -> IO ()
+run fallback Config{..} = do
 
     let certfiles = _ssl
     certs <- mapM (readCert.snd) certfiles
@@ -158,7 +181,7 @@ main = do
           | checkSNI host p = return (TLS.Credentials [cert])
           | otherwise       = lookupSNI host cs
 
-        checkSNI host pattern = case pattern of
+        checkSNI host pat = case pat of
             '*' : '.' : p -> ('.' : p) `isSuffixOf` host
             p             -> host == p
 
@@ -171,7 +194,7 @@ main = do
     manager <- newTlsManager
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev)
-        proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager dumbApp
+        proxy = (if isSSL then forceSSL pset else id) $ gzip def $ httpProxy pset manager $ reverseProxy pset manager fallback
 
     case _doh of
         Nothing  -> runner settings proxy

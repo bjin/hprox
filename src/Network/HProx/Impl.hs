@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module HProx
+module Network.HProx.Impl
   ( ProxySettings(..)
   , httpProxy
   , pacProvider
@@ -12,7 +12,6 @@ module HProx
   , httpConnectProxy
   , reverseProxy
   , forceSSL
-  , dumbApp
   ) where
 
 import           Control.Applicative        ((<|>))
@@ -41,7 +40,7 @@ import qualified Network.HTTP.Types.Header  as HT
 import           Data.Conduit
 import           Network.Wai
 
-import           Util
+import           Network.HProx.Util
 
 data ProxySettings = ProxySettings
   { proxyAuth  :: Maybe (BS.ByteString -> Bool)
@@ -49,17 +48,6 @@ data ProxySettings = ProxySettings
   , wsRemote   :: Maybe BS.ByteString
   , revRemote  :: Maybe BS.ByteString
   }
-
-dumbApp :: Application
-dumbApp _req respond =
-    respond $ responseLBS
-        HT.status200
-        [("Content-Type", "text/html")] $
-        LBS8.unlines [ "<html><body><h1>It works!</h1>"
-                     , "<p>This is the default web page for this server.</p>"
-                     , "<p>The web server software is running but no content has been added, yet.</p>"
-                     , "</body></html>"
-                     ]
 
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
 httpProxy set mgr = pacProvider . httpGetProxy set mgr . httpConnectProxy set
