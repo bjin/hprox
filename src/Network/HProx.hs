@@ -15,17 +15,19 @@ module Network.HProx
   ) where
 
 import Data.ByteString.Char8               qualified as BS8
-import Data.List                           (isSuffixOf)
+import Data.List                           (isSuffixOf, (\\))
 import Data.String                         (fromString)
 import Data.Version                        (showVersion)
 import Network.HTTP.Client.TLS             (newTlsManager)
 import Network.TLS                         qualified as TLS
+import Network.TLS.Extra.Cipher            qualified as TLS
 import Network.Wai                         (Application, modifyResponse)
 import Network.Wai.Handler.Warp
     (HostPreference, defaultSettings, runSettings, setBeforeMainLoop, setHost,
     setNoParsePath, setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure (..), onInsecure, runTLS, tlsServerHooks, tlsSettings)
+    (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
+    tlsServerHooks, tlsSettings)
 import Network.Wai.Middleware.Gzip         (def, gzip)
 import Network.Wai.Middleware.StripHeaders (stripHeaders)
 import System.Posix.User
@@ -171,7 +173,22 @@ run fallback Config{..} = do
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
         hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
-        tlsset = tlsset' { tlsServerHooks = hooks, onInsecure = AllowInsecure }
+
+        -- https://www.ssllabs.com/ssltest
+        weak_ciphers = [ TLS.cipher_ECDHE_RSA_AES256CBC_SHA384
+                       , TLS.cipher_ECDHE_RSA_AES256CBC_SHA
+                       , TLS.cipher_AES256CCM_SHA256
+                       , TLS.cipher_AES256GCM_SHA384
+                       , TLS.cipher_AES256_SHA256
+                       , TLS.cipher_AES256_SHA1
+                       ]
+
+        tlsset = tlsset'
+               { tlsServerHooks = hooks
+               , onInsecure = AllowInsecure
+               , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
+               , tlsCiphers = TLS.ciphersuite_strong \\ weak_ciphers
+               }
 
         onSNI Nothing = fail "SNI: unspecified"
         onSNI (Just host)
