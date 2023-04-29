@@ -5,11 +5,19 @@
 module Network.HProx.Util
   ( parseHostPort
   , parseHostPortWithDefault
+  , randomPadding
+  , randomPaddingLength
   ) where
 
-import Data.ByteString       qualified as BS
-import Data.ByteString.Char8 qualified as BS8
-import Data.Maybe            (fromMaybe)
+import Control.Monad          (replicateM)
+import Data.ByteString        qualified as BS
+import Data.ByteString.Char8  qualified as BS8
+import Data.Maybe             (fromMaybe)
+import Data.Word              (Word8)
+import System.Random          (uniformR)
+import System.Random.Stateful
+    (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
+
 
 parseHostPort :: BS.ByteString -> Maybe (BS.ByteString, Int)
 parseHostPort hostPort = do
@@ -24,3 +32,19 @@ parseHostPort hostPort = do
 parseHostPortWithDefault :: Int -> BS.ByteString -> (BS.ByteString, Int)
 parseHostPortWithDefault defaultPort hostPort =
     fromMaybe (hostPort, defaultPort) $ parseHostPort hostPort
+
+randomPadding :: IO BS.ByteString
+randomPadding = applyAtomicGen generate globalStdGen
+  where
+    nonHuffman = "!#$()+<>?@[]^`{}"
+    countNonHuffman = length nonHuffman
+
+    generate g0 = runStateGen g0 $ \gen -> do
+        len <- uniformRM (32, 63) gen
+        prefix <- replicateM 24 $ do
+            idx <- uniformRM (0, countNonHuffman - 1) gen
+            return $ nonHuffman !! idx
+        return (BS8.pack (prefix ++ replicate (len - 24) '~'))
+
+randomPaddingLength :: IO Int
+randomPaddingLength = applyAtomicGen (uniformR (1, 255)) globalStdGen

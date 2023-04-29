@@ -21,8 +21,10 @@ import Data.Binary.Builder        qualified as BB
 import Data.ByteString            qualified as BS
 import Data.ByteString.Base64     (decodeLenient)
 import Data.ByteString.Char8      qualified as BS8
+import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive       qualified as CI
+import Data.Conduit.Binary        qualified as CB
 import Data.Conduit.Network       qualified as CN
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
@@ -39,10 +41,11 @@ import Network.Wai
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
-  { proxyAuth  :: Maybe (BS.ByteString -> Bool)
-  , passPrompt :: Maybe BS.ByteString
-  , wsRemote   :: Maybe BS.ByteString
-  , revRemote  :: Maybe BS.ByteString
+  { proxyAuth    :: Maybe (BS.ByteString -> Bool)
+  , passPrompt   :: Maybe BS.ByteString
+  , wsRemote     :: Maybe BS.ByteString
+  , revRemote    :: Maybe BS.ByteString
+  , naivePadding :: Bool
   }
 
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
@@ -181,7 +184,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset fallback req respond
     | not isConnectProxy = fallback req respond
-    | checkAuth pset req = respond response
+    | checkAuth pset req = respondResponse
     | otherwise          = respond (proxyAuthRequiredResponse pset)
   where
     hostPort' = parseHostPort (rawPathInfo req) <|> (requestHeaderHost req >>= parseHostPort)
@@ -196,13 +199,59 @@ httpConnectProxy pset fallback req respond
     tryAndCatchAll :: IO a -> IO (Either SomeException a)
     tryAndCatchAll = try
 
-    response
-        | HT.httpMajor (httpVersion req) < 2 = responseRaw (handleConnect True) backup
-        | otherwise                          = responseStream HT.status200 [] streaming
+    respondResponse
+        | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect True) backup
+        | not (naivePadding pset)            = respond $ responseStream HT.status200 [] streaming
+        | otherwise                          = do
+            padding <- randomPadding
+            respond $ responseStream HT.status200 [("Padding", padding)] streaming
       where
         streaming write flush = do
             flush
             handleConnect False (getRequestBodyChunk req) (\bs -> write (BB.fromByteString bs) >> flush)
+
+    maximumLength = 65535 - 3 - 255
+    countPaddings = 8
+
+    addStreamPadding = isJust (lookup "Padding" (requestHeaders req)) && naivePadding pset
+
+    addPadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
+    addPadding 0 = awaitForever yield
+    addPadding n = do
+        mbs <- await
+        case mbs of
+            Nothing -> return ()
+            Just bs | BS.null bs -> return ()
+            Just bs -> do
+                let (bs0, bs1) = BS.splitAt maximumLength bs
+                unless (BS.null bs1) $ leftover bs1
+                let len = BS.length bs0
+                paddingLen <- liftIO randomPaddingLength
+                let header = mconcat (map (BB.singleton.fromIntegral) [len `div` 256, len `mod` 256, paddingLen])
+                    body   = BB.fromByteString bs0
+                    tailer = BB.fromByteString (BS.replicate paddingLen 0)
+                yield $ LBS.toStrict $ BB.toLazyByteString (header <> body <> tailer)
+                addPadding (n - 1)
+
+    removePadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
+    removePadding 0 = awaitForever yield
+    removePadding n = do
+        header <- CB.take 3
+        case LBS.unpack header of
+            [b0, b1, b2] -> do
+                let len = fromIntegral b0 * 256 + fromIntegral b1
+                    paddingLen = fromIntegral b2
+                bs <- CB.take (fromIntegral (len + paddingLen))
+                if LBS.length bs /= len + paddingLen
+                    then return ()
+                    else yield (LBS.toStrict $ LBS.take len bs) >> removePadding (n - 1)
+            _ -> return ()
+
+    yieldHttp1Response
+        | naivePadding pset = do
+            padding <- BB.fromByteString <$> liftIO randomPadding
+            yield $ LBS.toStrict $ BB.toLazyByteString ("HTTP/1.1 200 OK\r\nPadding: " <> padding <> "\r\n\r\n")
+        | otherwise         = yield "HTTP/1.1 200 OK\r\n\r\n"
 
     handleConnect :: Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
     handleConnect http1 fromClient' toClient' = CN.runTCPClient settings $ \server ->
@@ -212,8 +261,14 @@ httpConnectProxy pset fallback req respond
                 bs <- liftIO fromClient'
                 unless (BS.null bs) (yield bs >> fromClient)
             toClient = awaitForever (liftIO . toClient')
+
+            clientToServer | addStreamPadding = fromClient .| removePadding countPaddings .| toServer
+                           | otherwise        = fromClient .| toServer
+
+            serverToClient | addStreamPadding = fromServer .| addPadding countPaddings .| toClient
+                           | otherwise        = fromServer .| toClient
         in do
-            when http1 $ runConduit $ yield "HTTP/1.1 200 OK\r\n\r\n" .| toClient
+            when http1 $ runConduit $ yieldHttp1Response .| toClient
             void $ tryAndCatchAll $ concurrently
-                (runConduit (fromClient .| toServer))
-                (runConduit (fromServer .| toClient))
+                (runConduit clientToServer)
+                (runConduit serverToClient)

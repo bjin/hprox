@@ -41,19 +41,20 @@ import Paths_hprox        (version)
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
-  { _bind :: Maybe HostPreference
-  , _port :: Int
-  , _ssl  :: [(String, CertFile)]
-  , _user :: Maybe String
-  , _auth :: Maybe FilePath
-  , _ws   :: Maybe String
-  , _rev  :: Maybe String
-  , _doh  :: Maybe String
+  { _bind  :: Maybe HostPreference
+  , _port  :: Int
+  , _ssl   :: [(String, CertFile)]
+  , _user  :: Maybe String
+  , _auth  :: Maybe FilePath
+  , _ws    :: Maybe String
+  , _rev   :: Maybe String
+  , _doh   :: Maybe String
+  , _naive :: Bool
   }
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False
 
 -- | Certificate file pairs
 data CertFile = CertFile
@@ -88,6 +89,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> ws
                     <*> rev
                     <*> doh
+                    <*> naive
 
     bind = optional $ fromString <$> strOption
         ( long "bind"
@@ -133,6 +135,10 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         ( long "doh"
        <> metavar "dns-server:port"
        <> help "enable DNS-over-HTTPS(DoH) support (53 will be used if port is not specified)")
+
+    naive = switch
+          ( long "naive"
+         <> help "add naiveproxy-compatible padding (requires TLS)")
 
 
 setuid :: String -> IO ()
@@ -189,7 +195,7 @@ run fallback Config{..} = do
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev)
+    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL)
         proxy = (if isSSL then forceSSL pset else id) $
                 modifyResponse (stripHeaders ["Server", "Date"]) $
                 gzip def $
