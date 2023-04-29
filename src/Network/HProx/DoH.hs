@@ -58,7 +58,6 @@ handleDoH resolver req respond
             Left _ -> errorResp
             Right dnsResp@DNSMessage{header = header} ->
                 let encoded = DNS.encode (dnsResp {header = header {identifier = ident} }) in
-                    responseLBS HT.status200
-                        [("Content-Type", "application/dns-message"),
-                         ("Content-Length", BS8.pack $ show (BS8.length encoded))]
+                    responseKnownLength HT.status200
+                        [("Content-Type", "application/dns-message")]
                         (LBS.fromStrict encoded)

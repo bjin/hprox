@@ -59,15 +59,14 @@ forceSSL pset app req respond
 
 redirectToSSL :: Application
 redirectToSSL req respond
-    | Just host <- requestHeaderHost req = respond $ responseLBS
+    | Just host <- requestHeaderHost req = respond $ responseKnownLength
         HT.status301
         [("Location", "https://" `BS.append` host)]
         ""
-    | otherwise                          = respond $ responseLBS
+    | otherwise                          = respond $ responseKnownLength
         (HT.mkStatus 426 "Upgrade Required")
         [("Upgrade", "TLS/1.0, HTTP/1.1"), ("Connection", "Upgrade")]
         ""
-
 
 isProxyHeader :: HT.HeaderName -> Bool
 isProxyHeader k = "proxy" `BS.isPrefixOf` CI.foldedCase k
@@ -92,7 +91,7 @@ redirectWebsocket :: ProxySettings -> Request -> Bool
 redirectWebsocket ProxySettings{..} req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust wsRemote
 
 proxyAuthRequiredResponse :: ProxySettings -> Response
-proxyAuthRequiredResponse ProxySettings{..} = responseLBS
+proxyAuthRequiredResponse ProxySettings{..} = responseKnownLength
     HT.status407
     [(HT.hProxyAuthenticate, "Basic realm=\"" `BS.append` prompt `BS.append` "\"")]
     ""
@@ -110,7 +109,7 @@ pacProvider fallback req respond
             defaultPort = if issecure then ":443" else ":80"
             host | 58 `BS.elem` host' = host' -- ':'
                  | otherwise          = host' `BS.append` defaultPort
-        in respond $ responseLBS
+        in respond $ responseKnownLength
                HT.status200
                [("Content-Type", "application/x-ns-proxy-autoconfig")] $
                LBS8.unlines [ "function FindProxyForURL(url, host) {"
@@ -193,7 +192,7 @@ httpConnectProxy pset fallback req respond
     Just (host, port) = hostPort'
     settings = CN.clientSettings port host
 
-    backup = responseLBS HT.status500 [("Content-Type", "text/plain")]
+    backup = responseKnownLength HT.status500 [("Content-Type", "text/plain")]
         "HTTP CONNECT tunneling detected, but server does not support responseRaw"
 
     tryAndCatchAll :: IO a -> IO (Either SomeException a)

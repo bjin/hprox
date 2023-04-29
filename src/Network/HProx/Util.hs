@@ -7,17 +7,20 @@ module Network.HProx.Util
   , parseHostPortWithDefault
   , randomPadding
   , randomPaddingLength
+  , responseKnownLength
   ) where
 
 import Control.Monad          (replicateM)
 import Data.ByteString        qualified as BS
 import Data.ByteString.Char8  qualified as BS8
+import Data.ByteString.Lazy   qualified as LBS
 import Data.Maybe             (fromMaybe)
-import Data.Word              (Word8)
 import System.Random          (uniformR)
 import System.Random.Stateful
     (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
 
+import Network.HTTP.Types (ResponseHeaders, Status)
+import Network.Wai
 
 parseHostPort :: BS.ByteString -> Maybe (BS.ByteString, Int)
 parseHostPort hostPort = do
@@ -48,3 +51,6 @@ randomPadding = applyAtomicGen generate globalStdGen
 
 randomPaddingLength :: IO Int
 randomPaddingLength = applyAtomicGen (uniformR (1, 255)) globalStdGen
+
+responseKnownLength :: Status -> ResponseHeaders -> LBS.ByteString -> Response
+responseKnownLength status headers bs = responseLBS status (headers ++ [("Content-Length", BS8.pack $ show (LBS.length bs))]) bs
