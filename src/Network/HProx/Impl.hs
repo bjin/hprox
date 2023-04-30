@@ -214,6 +214,7 @@ httpConnectProxy pset fallback req respond
 
     addStreamPadding = isJust (lookup "Padding" (requestHeaders req)) && naivePadding pset
 
+    -- see: https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification
     addPadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
     addPadding 0 = awaitForever yield
     addPadding n = do

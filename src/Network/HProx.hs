@@ -140,7 +140,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
 
     naive = switch
           ( long "naive"
-         <> help "add naiveproxy-compatible padding (requires TLS)")
+         <> help "add naiveproxy compatible padding (requires TLS)")
 
 
 setuid :: String -> IO ()

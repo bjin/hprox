@@ -18,6 +18,7 @@
 * Websocket redirection (compatible with [v2ray-plugin](https://github.com/shadowsocks/v2ray-plugin)).
 * Reverse proxy support (redirect requests to a fallback server).
 * DNS-over-HTTPS (DoH) support.
+* [naiveproxy](https://github.com/klzgrad/naiveproxy) compatible [padding](https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification) (HTTP Connect proxy).
 * Implemented as a middleware, compatible with any Haskell Web Application built with `wai` interface.
   See [library documents](https://hackage.haskell.org/package/hprox) for details.
 
