@@ -69,13 +69,16 @@ redirectToSSL req respond
         ""
 
 isProxyHeader :: HT.HeaderName -> Bool
-isProxyHeader k = "proxy" `BS.isPrefixOf` CI.foldedCase k
+isProxyHeader h = "proxy" `BS.isPrefixOf` CI.foldedCase h
 
 isForwardedHeader :: HT.HeaderName -> Bool
-isForwardedHeader k = "x-forwarded" `BS.isPrefixOf` CI.foldedCase k
+isForwardedHeader h = "x-forwarded" `BS.isPrefixOf` CI.foldedCase h
+
+isCDNHeader :: HT.HeaderName -> Bool
+isCDNHeader h = "cf-" `BS.isPrefixOf` CI.foldedCase h || h == "cdn-loop"
 
 isToStripHeader :: HT.HeaderName -> Bool
-isToStripHeader h = isProxyHeader h || isForwardedHeader h || h == "X-Real-IP" || h == "X-Scheme"
+isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
 checkAuth :: ProxySettings -> Request -> Bool
 checkAuth ProxySettings{..} req
