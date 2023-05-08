@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
+{-# LANGUAGE CPP #-}
 
 {-| Instead of running @hprox@ binary directly, you can use this library
     to run HProx in front of arbitrary WAI 'Application'.
@@ -21,17 +22,26 @@ import Data.Version                        (showVersion)
 import Network.HTTP.Client.TLS             (newTlsManager)
 import Network.TLS                         qualified as TLS
 import Network.TLS.Extra.Cipher            qualified as TLS
+import Network.TLS.SessionManager          qualified as SM
 import Network.Wai                         (Application, modifyResponse)
 import Network.Wai.Handler.Warp
-    (HostPreference, defaultSettings, runSettings, setBeforeMainLoop, setHost,
-    setNoParsePath, setOnException, setPort, setServerName)
+    (defaultSettings, runSettings, setBeforeMainLoop, setHost, setNoParsePath,
+    setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
-    tlsServerHooks, tlsSettings)
+    tlsServerHooks, tlsSessionManager, tlsSettings)
 import Network.Wai.Middleware.Gzip         (def, gzip)
 import Network.Wai.Middleware.StripHeaders (stripHeaders)
 import System.Posix.User
     (UserEntry (..), getUserEntryForName, setUserID)
+
+#ifdef QUIC_ENABLED
+import Control.Concurrent.Async     (mapConcurrently_)
+import Data.List                    (find)
+import Network.QUIC.Internal        qualified as Q
+import Network.Wai.Handler.Warp     (setAltSvc)
+import Network.Wai.Handler.WarpQUIC (runQUIC)
+#endif
 
 import Data.Maybe
 import Options.Applicative
@@ -43,7 +53,7 @@ import Paths_hprox        (version)
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
-  { _bind  :: Maybe HostPreference
+  { _bind  :: Maybe String
   , _port  :: Int
   , _ssl   :: [(String, CertFile)]
   , _user  :: Maybe String
@@ -52,11 +62,17 @@ data Config = Config
   , _rev   :: Maybe String
   , _doh   :: Maybe String
   , _naive :: Bool
+#ifdef QUIC_ENABLED
+  , _quic  :: Maybe Int
+#endif
   }
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
 defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False
+#ifdef QUIC_ENABLED
+    Nothing
+#endif
 
 -- | Certificate file pairs
 data CertFile = CertFile
@@ -92,8 +108,11 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> rev
                     <*> doh
                     <*> naive
+#ifdef QUIC_ENABLED
+                    <*> quic
+#endif
 
-    bind = optional $ fromString <$> strOption
+    bind = optional $ strOption
         ( long "bind"
        <> short 'b'
        <> metavar "bind_ip"
@@ -142,6 +161,13 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
           ( long "naive"
          <> help "add naiveproxy compatible padding (requires TLS)")
 
+#ifdef QUIC_ENABLED
+    quic = optional $ option auto
+        ( long "quic"
+       <> short 'q'
+       <> metavar "port"
+       <> help "enable QUIC (HTTP/3) on UDP port")
+#endif
 
 setuid :: String -> IO ()
 setuid user = getUserEntryForName user >>= setUserID . userID
@@ -158,12 +184,13 @@ run fallback Config{..} = do
 
     let certfiles = _ssl
     certs <- mapM (readCert.snd) certfiles
+    smgr <- SM.newSessionManager SM.defaultConfig
 
     let isSSL = not (null certfiles)
         (primaryHost, primaryCert) = head certfiles
         otherCerts = tail $ zip (map fst certfiles) certs
 
-        settings = setHost (fromMaybe "*6" _bind) $
+        settings = setHost (fromString (fromMaybe "*6" _bind)) $
                    setPort _port $
                    setOnException (\_ _ -> return ()) $
                    setNoParsePath True $
@@ -184,11 +211,12 @@ run fallback Config{..} = do
                        ]
 
         tlsset = tlsset'
-               { tlsServerHooks = hooks
-               , onInsecure = AllowInsecure
-               , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
-               , tlsCiphers = TLS.ciphersuite_strong \\ weak_ciphers
-               }
+            { tlsServerHooks     = hooks
+            , onInsecure         = AllowInsecure
+            , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
+            , tlsCiphers         = TLS.ciphersuite_strong \\ weak_ciphers
+            , tlsSessionManager  = Just smgr
+            }
 
         onSNI Nothing = fail "SNI: unspecified"
         onSNI (Just host)
@@ -204,8 +232,30 @@ run fallback Config{..} = do
             '*' : '.' : p -> ('.' : p) `isSuffixOf` host
             p             -> host == p
 
-        runner | isSSL     = runTLS tlsset
-               | otherwise = runSettings
+#ifdef QUIC_ENABLED
+        alpn _ = return . fromMaybe "" . find (== "h3")
+        altsvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
+
+        quicset qport = Q.defaultServerConfig
+            { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
+            , Q.scVersions       = [Q.Version1, Q.Version2]
+            , Q.scCredentials    = TLS.Credentials [head certs]
+            , Q.scCiphers        = Q.scCiphers Q.defaultServerConfig \\ weak_ciphers
+            , Q.scALPN           = Just alpn
+            , Q.scUse0RTT        = True
+            , Q.scSessionManager = smgr
+            }
+
+        runner | not isSSL           = runSettings settings
+               | Just qport <- _quic = \app -> mapConcurrently_ ($ app)
+                    [ runQUIC (quicset qport) settings
+                    , runTLS tlsset (setAltSvc (altsvc qport) settings)
+                    ]
+               | otherwise           = runTLS tlsset settings
+#else
+        runner | isSSL     = runTLS tlsset settings
+               | otherwise = runSettings settings
+#endif
 
     pauth <- case _auth of
         Nothing -> return Nothing
@@ -220,5 +270,5 @@ run fallback Config{..} = do
                 reverseProxy pset manager fallback
 
     case _doh of
-        Nothing  -> runner settings proxy
-        Just doh -> createResolver doh (\resolver -> runner settings (dnsOverHTTPS resolver proxy))
+        Nothing  -> runner proxy
+        Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver proxy))

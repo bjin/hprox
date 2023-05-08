@@ -1,4 +1,4 @@
-resolver: nightly-2023-04-28
+resolver: nightly-2023-05-08
 packages:
 - '.'
 extra-deps:
@@ -6,5 +6,13 @@ extra-deps:
   commit: warp-3.3.25-patched
   subdirs:
   - warp
-flags: {}
+- crypto-token-0.0.1
+- http3-0.0.3
+- network-udp-0.0.0
+- quic-0.1.1
+- sockaddr-0.0.1
+- warp-quic-0.0.0
+flags:
+  hprox:
+    quic: true
 extra-package-dbs: []

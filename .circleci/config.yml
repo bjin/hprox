@@ -12,10 +12,10 @@ jobs:
             - cci-hprox-v4-{{ checksum "stack.yaml" }}
       - run:
           name: Workaround for OOM (build http-reverse-proxy first)
-          command: stack build http-reverse-proxy --flag hprox:static
+          command: stack build http-reverse-proxy --flag hprox:static --flag hprox:quic
       - run:
           name: Install executable
-          command: stack install --flag hprox:static
+          command: stack install --flag hprox:static --flag hprox:quic
       - run:
           name: Package executable
           command: mkdir ~/release && tar czvf ~/release/hprox-$(stack query locals hprox version | tr -d -C "0-9.")-$(git rev-parse --short HEAD)-linux-x86_64-static.tar.gz -C ~/.local/bin hprox

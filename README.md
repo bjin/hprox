@@ -19,6 +19,7 @@
 * Reverse proxy support (redirect requests to a fallback server).
 * DNS-over-HTTPS (DoH) support.
 * [naiveproxy](https://github.com/klzgrad/naiveproxy) compatible [padding](https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification) (HTTP Connect proxy).
+* HTTP/3 (QUIC) support (`h3` protocol).
 * Implemented as a middleware, compatible with any Haskell Web Application built with `wai` interface.
   See [library documents](https://hackage.haskell.org/package/hprox) for details.
 
@@ -47,10 +48,10 @@ echo "user:pass" > userpass.txt
 hprox -p 8080 -a userpass.txt
 ```
 
-* To run `hprox` with TLS encryption on port 443, with certificate of `example.com` obtained with [certbot](https://certbot.eff.org/):
+* To run `hprox` with TLS encryption on port 443, with certificate of `example.com` obtained with [acme.sh](https://acme.sh/):
 
 ```sh
-hprox -p 443 -s example.com:/etc/letsencrypt/live/example.com/fullchain.pem:/etc/letsencrypt/live/example.com/privkey.pem
+hprox -p 443 -s example.com:$HOME/.acme.sh/example.com/fullchain.cer:$HOME/.acme.sh/example.com/example.com.key
 ```
 
 Browsers can be configured with PAC file URL `https://example.com/get/hprox.pac`.
@@ -64,10 +65,17 @@ hprox -p 443 -s example.com:fullchain.pem:privkey.pem --ws 127.0.0.1:8080 --rev 
 
 Clients will be able to connect with plugin option `tls;host=example.com`.
 
+* Enable HTTP/3 (QUIC) on UDP port 8443, enable DoH support (redirect to 8.8.8.8), and add `naiveproxy` compatible padding:
+
+```sh
+hprox -p 443 -q 8443 -s example.com:fullchain.pem:privkey.pem -a userpass.txt --naive --doh 8.8.8.8
+```
+
 ### Known Issue
 
 * Passwords are currently stored in plain text, please set permission accordingly and
   avoid using existing password.
+* HTTP/3 currently only works on the first domain as specified by `-s/--tls`.
 
 ### License
 
