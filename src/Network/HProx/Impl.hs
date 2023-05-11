@@ -8,6 +8,7 @@ module Network.HProx.Impl
   , httpConnectProxy
   , httpGetProxy
   , httpProxy
+  , logRequest
   , pacProvider
   , reverseProxy
   ) where
@@ -40,6 +41,7 @@ import Network.Wai
 import Network.Wai.Middleware.Gzip
 import Network.Wai.Middleware.StripHeaders
 
+import Network.HProx.Log
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
@@ -48,7 +50,18 @@ data ProxySettings = ProxySettings
   , wsRemote     :: Maybe BS.ByteString
   , revRemote    :: Maybe BS.ByteString
   , naivePadding :: Bool
+  , logger       :: Logger
   }
+
+logRequest :: Request -> LogStr
+logRequest req = toLogStr (requestMethod req) <>
+    " " <> hostname <> toLogStr (rawPathInfo req) <>
+    " " <> toLogStr (show $ remoteHost req)
+  where
+    isConnect = requestMethod req == "CONNECT"
+    isGet = "http://" `BS.isPrefixOf` rawPathInfo req
+    hostname | isConnect || isGet = ""
+             | otherwise          = toLogStr (fromMaybe "(no-host)" $ requestHeaderHost req)
 
 httpProxy :: ProxySettings -> HC.Manager -> Middleware
 httpProxy set mgr = pacProvider . httpGetProxy set mgr . httpConnectProxy set
@@ -163,7 +176,9 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = appWrapper $ waiProxyToSettin
         | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
         | not isGETProxy             = WPRApplication fallback
         | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
-        | otherwise                  = WPRResponse (proxyAuthRequiredResponse pset)
+        | otherwise                  =
+            pureLogger logger WARN ("unauthorized request: " <> logRequest req) $
+            WPRResponse (proxyAuthRequiredResponse pset)
       where
         (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust wsRemote)
         wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
@@ -194,10 +209,12 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = appWrapper $ waiProxyToSettin
                 BS.drop (BS.length rawPathPrefix) rawPath
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset fallback req respond
+httpConnectProxy pset@ProxySettings{..} fallback req respond
     | not isConnectProxy = fallback req respond
     | checkAuth pset req = respondResponse
-    | otherwise          = respond (proxyAuthRequiredResponse pset)
+    | otherwise          = do
+        logger WARN $ "unauthorized request: " <> logRequest req
+        respond (proxyAuthRequiredResponse pset)
   where
     hostPort' = parseHostPort (rawPathInfo req) <|> (requestHeaderHost req >>= parseHostPort)
     isConnectProxy = requestMethod req == "CONNECT" && isJust hostPort'
@@ -213,7 +230,7 @@ httpConnectProxy pset fallback req respond
 
     respondResponse
         | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect True) backup
-        | not (naivePadding pset)            = respond $ responseStream HT.status200 [] streaming
+        | not naivePadding                   = respond $ responseStream HT.status200 [] streaming
         | otherwise                          = do
             padding <- randomPadding
             respond $ responseStream HT.status200 [("Padding", padding)] streaming
@@ -225,7 +242,7 @@ httpConnectProxy pset fallback req respond
     maximumLength = 65535 - 3 - 255
     countPaddings = 8
 
-    addStreamPadding = isJust (lookup "Padding" (requestHeaders req)) && naivePadding pset
+    addStreamPadding = isJust (lookup "Padding" (requestHeaders req)) && naivePadding
 
     -- see: https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification
     addPadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
@@ -261,10 +278,10 @@ httpConnectProxy pset fallback req respond
             _ -> return ()
 
     yieldHttp1Response
-        | naivePadding pset = do
+        | naivePadding = do
             padding <- BB.fromByteString <$> liftIO randomPadding
             yield $ LBS.toStrict $ BB.toLazyByteString ("HTTP/1.1 200 OK\r\nPadding: " <> padding <> "\r\n\r\n")
-        | otherwise         = yield "HTTP/1.1 200 OK\r\n\r\n"
+        | otherwise    = yield "HTTP/1.1 200 OK\r\n\r\n"
 
     handleConnect :: Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
     handleConnect http1 fromClient' toClient' = CN.runTCPClient settings $ \server ->
@@ -281,7 +298,11 @@ httpConnectProxy pset fallback req respond
             serverToClient | addStreamPadding = fromServer .| addPadding countPaddings .| toClient
                            | otherwise        = fromServer .| toClient
         in do
+            logger DEBUG $ "streaming of HTTP CONNECT proxy started: "
+                <> toLogStr (show $ remoteHost req) <> " <-> "
+                <> toLogStr host <> ":" <> toLogStr port
             when http1 $ runConduit $ yieldHttp1Response .| toClient
+            when addStreamPadding $ logger TRACE "  added naiveproxy payload padding"
             void $ tryAndCatchAll $ concurrently
                 (runConduit clientToServer)
                 (runConduit serverToClient)

@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-| Instead of running @hprox@ binary directly, you can use this library
     to run HProx in front of arbitrary WAI 'Application'.
@@ -15,18 +16,21 @@ module Network.HProx
   , run
   ) where
 
+import Control.Exception           (Exception (..))
 import Data.ByteString.Char8       qualified as BS8
 import Data.List                   (isSuffixOf, (\\))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
+import Network.HTTP.Types          qualified as HT
 import Network.TLS                 qualified as TLS
 import Network.TLS.Extra.Cipher    qualified as TLS
 import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application)
 import Network.Wai.Handler.Warp
-    (defaultSettings, runSettings, setBeforeMainLoop, setHost, setNoParsePath,
-    setOnException, setPort, setServerName)
+    (defaultSettings, defaultShouldDisplayException, runSettings,
+    setBeforeMainLoop, setHost, setLogger, setNoParsePath, setOnException,
+    setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
     tlsServerHooks, tlsSessionManager, tlsSettings)
@@ -41,34 +45,36 @@ import Network.Wai.Handler.Warp     (setAltSvc)
 import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
+import Control.Monad
 import Data.Maybe
 import Options.Applicative
 
 import Network.HProx.DoH
 import Network.HProx.Impl
-    (ProxySettings (..), forceSSL, httpProxy, reverseProxy)
-import Paths_hprox        (version)
+import Network.HProx.Log
+import Paths_hprox
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
-  { _bind  :: Maybe String
-  , _port  :: Int
-  , _ssl   :: [(String, CertFile)]
-  , _user  :: Maybe String
-  , _auth  :: Maybe FilePath
-  , _ws    :: Maybe String
-  , _rev   :: Maybe String
-  , _doh   :: Maybe String
-  , _naive :: Bool
-  , _name  :: BS8.ByteString
+  { _bind     :: Maybe String
+  , _port     :: Int
+  , _ssl      :: [(String, CertFile)]
+  , _user     :: Maybe String
+  , _auth     :: Maybe FilePath
+  , _ws       :: Maybe String
+  , _rev      :: Maybe String
+  , _doh      :: Maybe String
+  , _naive    :: Bool
+  , _name     :: BS8.ByteString
+  , _loglevel :: LogLevel
 #ifdef QUIC_ENABLED
-  , _quic  :: Maybe Int
+  , _quic     :: Maybe Int
 #endif
   }
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox"
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox" INFO
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -108,6 +114,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> doh
                     <*> naive
                     <*> name
+                    <*> loglevel
 #ifdef QUIC_ENABLED
                     <*> quic
 #endif
@@ -170,6 +177,12 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> showDefault
        <> help "specify the server name for the 'Server' header")
 
+    loglevel = option (maybeReader logLevelReader)
+        ( long "loglevel"
+       <> metavar "<trace|debug|info|warn|error|none>"
+       <> value INFO
+       <> help "specify the logging level (default: info)")
+
 #ifdef QUIC_ENABLED
     quic = optional $ option auto
         ( long "quic"
@@ -189,9 +202,12 @@ getConfig = execParser parser
 run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
-run fallback Config{..} = do
+run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
+    logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
+    logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
 
     let certfiles = _ssl
+
     certs <- mapM (readCert.snd) certfiles
     smgr <- SM.newSessionManager SM.defaultConfig
 
@@ -199,13 +215,27 @@ run fallback Config{..} = do
         (primaryHost, primaryCert) = head certfiles
         otherCerts = tail $ zip (map fst certfiles) certs
 
-        settings = setHost (fromString (fromMaybe "*6" _bind)) $
+    when isSSL $ do
+        logger INFO $ "read " <> toLogStr (show $ length certs) <> " certificates"
+        logger INFO $ "primary domain: " <> toLogStr primaryHost
+        logger INFO $ "other domains: " <> toLogStr (unwords $ map fst otherCerts)
+
+    let settings = setHost (fromString (fromMaybe "*6" _bind)) $
                    setPort _port $
-                   setOnException (\_ _ -> return ()) $
+                   setLogger warpLogger $
+                   setOnException exceptionHandler $
                    setNoParsePath True $
                    setServerName _name $
                    maybe id (setBeforeMainLoop . setuid) _user
                    defaultSettings
+
+        exceptionHandler req ex
+            | defaultShouldDisplayException ex = do
+                logger WARN $ "exception: " <> toLogStr (displayException ex) <>
+                    (if (isJust req) then " from: " <> logRequest (fromJust req) else "")
+            | otherwise                        = return ()
+
+        warpLogger req status _ = logger DEBUG $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
         hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
@@ -227,12 +257,14 @@ run fallback Config{..} = do
             , tlsSessionManager  = Just smgr
             }
 
-        onSNI Nothing = fail "SNI: unspecified"
+        logAndFail msg = logger WARN (toLogStr msg) >> fail msg
+
+        onSNI Nothing = logAndFail "SNI: unspecified"
         onSNI (Just host)
           | checkSNI host primaryHost = return mempty
           | otherwise                 = lookupSNI host otherCerts
 
-        lookupSNI host [] = fail ("SNI: unknown hostname (" ++ show host ++ ")")
+        lookupSNI host [] = logAndFail ("SNI: unknown hostname (" ++ show host ++ ")")
         lookupSNI host ((p, cert) : cs)
           | checkSNI host p = return (TLS.Credentials [cert])
           | otherwise       = lookupSNI host cs
@@ -256,10 +288,12 @@ run fallback Config{..} = do
             }
 
         runner | not isSSL           = runSettings settings
-               | Just qport <- _quic = \app -> mapConcurrently_ ($ app)
-                    [ runQUIC (quicset qport) settings
-                    , runTLS tlsset (setAltSvc (altsvc qport) settings)
-                    ]
+               | Just qport <- _quic = \app -> do
+                    logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
+                    mapConcurrently_ ($ app)
+                        [ runQUIC (quicset qport) settings
+                        , runTLS tlsset (setAltSvc (altsvc qport) settings)
+                        ]
                | otherwise           = runTLS tlsset settings
 #else
         runner | isSSL     = runTLS tlsset settings
@@ -268,14 +302,20 @@ run fallback Config{..} = do
 
     pauth <- case _auth of
         Nothing -> return Nothing
-        Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
+        Just f  -> do
+            logger INFO $ "read username and passwords from " <> toLogStr f
+            Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL)
+    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL) logger
         proxy = (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager $
                 fallback
+
+    when (isJust _ws) $ logger INFO $ "websocket redirect: " <> toLogStr (fromJust _ws)
+    when (isJust _rev) $ logger INFO $ "reverse proxy: " <> toLogStr (fromJust _rev)
+    when (isJust _doh) $ logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr (fromJust _doh)
 
     case _doh of
         Nothing  -> runner proxy
