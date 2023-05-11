@@ -298,7 +298,7 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
             serverToClient | addStreamPadding = fromServer .| addPadding countPaddings .| toClient
                            | otherwise        = fromServer .| toClient
         in do
-            logger DEBUG $ "streaming of HTTP CONNECT proxy started: "
+            logger TRACE $ "streaming of HTTP CONNECT proxy started: "
                 <> toLogStr (show $ remoteHost req) <> " <-> "
                 <> toLogStr host <> ":" <> toLogStr port
             when http1 $ runConduit $ yieldHttp1Response .| toClient

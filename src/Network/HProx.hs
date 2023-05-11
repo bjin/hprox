@@ -1,8 +1,9 @@
 -- SPDX-License-Identifier: Apache-2.0
---
+
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-| Instead of running @hprox@ binary directly, you can use this library
     to run HProx in front of arbitrary WAI 'Application'.
@@ -16,11 +17,12 @@ module Network.HProx
   , run
   ) where
 
-import Control.Exception           (Exception (..))
+import Control.Exception           (Exception (..), IOException)
 import Data.ByteString.Char8       qualified as BS8
 import Data.List                   (isSuffixOf, (\\))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
+import GHC.IO.Exception            (IOErrorType (..))
 import Network.HTTP.Client.TLS     (newTlsManager)
 import Network.HTTP.Types          qualified as HT
 import Network.TLS                 qualified as TLS
@@ -34,6 +36,7 @@ import Network.Wai.Handler.Warp
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
     tlsServerHooks, tlsSessionManager, tlsSettings)
+import System.IO.Error             (ioeGetErrorType)
 import System.Posix.User
     (UserEntry (..), getUserEntryForName, setUserID)
 
@@ -230,12 +233,17 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
                    defaultSettings
 
         exceptionHandler req ex
-            | defaultShouldDisplayException ex = do
-                logger WARN $ "exception: " <> toLogStr (displayException ex) <>
+            | Just (ioeGetErrorType -> EOF) <- fromException ex       = return ()
+            | msg == "ConnectionIsClosed"                             = return ()
+            | "Client closed connection prematurely" `isSuffixOf` msg = return ()
+            | defaultShouldDisplayException ex                        = do
+                logger DEBUG $ "exception: " <> toLogStr msg <>
                     (if (isJust req) then " from: " <> logRequest (fromJust req) else "")
-            | otherwise                        = return ()
+            | otherwise                                               = return ()
+          where
+            msg = displayException ex
 
-        warpLogger req status _ = logger DEBUG $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
+        warpLogger req status _ = logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
         hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
