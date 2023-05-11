@@ -60,6 +60,7 @@ data Config = Config
   , _rev   :: Maybe String
   , _doh   :: Maybe String
   , _naive :: Bool
+  , _name  :: BS8.ByteString
 #ifdef QUIC_ENABLED
   , _quic  :: Maybe Int
 #endif
@@ -67,7 +68,7 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox"
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -98,7 +99,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
     ver = infoOption (showVersion version) (long "version" <> help "show version")
 
     config = Config <$> bind
-                    <*> (fromMaybe 3000 <$> port)
+                    <*> port
                     <*> ssl
                     <*> user
                     <*> auth
@@ -106,6 +107,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> rev
                     <*> doh
                     <*> naive
+                    <*> name
 #ifdef QUIC_ENABLED
                     <*> quic
 #endif
@@ -116,11 +118,13 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> metavar "bind_ip"
        <> help "ip address to bind on (default: all interfaces)")
 
-    port = optional $ option auto
+    port = option auto
         ( long "port"
        <> short 'p'
        <> metavar "port"
-       <> help "port number (default 3000)")
+       <> value 3000
+       <> showDefault
+       <> help "port number")
 
     ssl = many $ option (eitherReader parseSSL)
         ( long "tls"
@@ -156,8 +160,15 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> help "enable DNS-over-HTTPS(DoH) support (53 will be used if port is not specified)")
 
     naive = switch
-          ( long "naive"
-         <> help "add naiveproxy compatible padding (requires TLS)")
+        ( long "naive"
+       <> help "add naiveproxy compatible padding (requires TLS)")
+
+    name = strOption
+        ( long "name"
+       <> metavar "server-name"
+       <> value "hprox"
+       <> showDefault
+       <> help "specify the server name for the 'Server' header")
 
 #ifdef QUIC_ENABLED
     quic = optional $ option auto
@@ -192,7 +203,7 @@ run fallback Config{..} = do
                    setPort _port $
                    setOnException (\_ _ -> return ()) $
                    setNoParsePath True $
-                   setServerName "Apache" $
+                   setServerName _name $
                    maybe id (setBeforeMainLoop . setuid) _user
                    defaultSettings
 
@@ -260,7 +271,7 @@ run fallback Config{..} = do
         Just f  -> Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL)
+    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL)
         proxy = (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager $
