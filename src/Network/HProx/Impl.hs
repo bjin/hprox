@@ -298,11 +298,7 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
             serverToClient | addStreamPadding = fromServer .| addPadding countPaddings .| toClient
                            | otherwise        = fromServer .| toClient
         in do
-            logger TRACE $ "streaming of HTTP CONNECT proxy started: "
-                <> toLogStr (show $ remoteHost req) <> " <-> "
-                <> toLogStr host <> ":" <> toLogStr port
             when http1 $ runConduit $ yieldHttp1Response .| toClient
-            when addStreamPadding $ logger TRACE "  added naiveproxy payload padding"
             void $ tryAndCatchAll $ concurrently
                 (runConduit clientToServer)
                 (runConduit serverToClient)
