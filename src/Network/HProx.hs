@@ -26,7 +26,7 @@ import Network.HTTP.Types          qualified as HT
 import Network.TLS                 qualified as TLS
 import Network.TLS.Extra.Cipher    qualified as TLS
 import Network.TLS.SessionManager  qualified as SM
-import Network.Wai                 (Application)
+import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
     (defaultSettings, defaultShouldDisplayException, runSettings,
     setBeforeMainLoop, setHost, setLogger, setNoParsePath, setOnException,
@@ -245,7 +245,10 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
           where
             msg = displayException ex
 
-        warpLogger req status _ = logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
+        warpLogger req status _
+            | rawPathInfo req == "/.hprox/health" = return ()
+            | otherwise                           =
+                logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
         tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
         hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
@@ -319,6 +322,7 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
 
     let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL) logger
         proxy = (if isSSL then forceSSL pset else id) $
+                healthCheckProvider $
                 httpProxy pset manager $
                 reverseProxy pset manager $
                 fallback

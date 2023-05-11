@@ -5,6 +5,7 @@
 module Network.HProx.Impl
   ( ProxySettings (..)
   , forceSSL
+  , healthCheckProvider
   , httpConnectProxy
   , httpGetProxy
   , httpProxy
@@ -136,6 +137,15 @@ pacProvider fallback req respond
                             , LBS8.fromChunks ["  return \"", scheme, " ", host, "\";"]
                             , "}"
                             ]
+    | otherwise = fallback req respond
+
+healthCheckProvider :: Middleware
+healthCheckProvider fallback req respond
+    | pathInfo req == [".hprox", "health"] =
+        respond $ responseKnownLength
+            HT.status200
+            [("Content-Type", "text/plain")]
+            "okay"
     | otherwise = fallback req respond
 
 reverseProxy :: ProxySettings -> HC.Manager -> Middleware
