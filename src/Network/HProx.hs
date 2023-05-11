@@ -17,12 +17,10 @@ module Network.HProx
   , run
   ) where
 
-import Control.Exception           (Exception (..), IOException)
 import Data.ByteString.Char8       qualified as BS8
 import Data.List                   (isSuffixOf, (\\))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
-import GHC.IO.Exception            (IOErrorType (..))
 import Network.HTTP.Client.TLS     (newTlsManager)
 import Network.HTTP.Types          qualified as HT
 import Network.TLS                 qualified as TLS
@@ -36,9 +34,12 @@ import Network.Wai.Handler.Warp
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
     tlsServerHooks, tlsSessionManager, tlsSettings)
-import System.IO.Error             (ioeGetErrorType)
 import System.Posix.User
     (UserEntry (..), getUserEntryForName, setUserID)
+
+import Control.Exception (Exception (..))
+import GHC.IO.Exception  (IOErrorType (..))
+import System.IO.Error   (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
 import Control.Concurrent.Async     (mapConcurrently_)
@@ -233,13 +234,14 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
                    defaultSettings
 
         exceptionHandler req ex
+            | _loglevel > DEBUG                                       = return ()
+            | not (defaultShouldDisplayException ex)                  = return ()
             | Just (ioeGetErrorType -> EOF) <- fromException ex       = return ()
             | msg == "ConnectionIsClosed"                             = return ()
             | "Client closed connection prematurely" `isSuffixOf` msg = return ()
-            | defaultShouldDisplayException ex                        = do
+            | otherwise                                               =
                 logger DEBUG $ "exception: " <> toLogStr msg <>
                     (if (isJust req) then " from: " <> logRequest (fromJust req) else "")
-            | otherwise                                               = return ()
           where
             msg = displayException ex
 

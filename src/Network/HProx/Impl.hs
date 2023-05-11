@@ -56,7 +56,9 @@ data ProxySettings = ProxySettings
 logRequest :: Request -> LogStr
 logRequest req = toLogStr (requestMethod req) <>
     " " <> hostname <> toLogStr (rawPathInfo req) <>
-    " " <> toLogStr (show $ remoteHost req)
+    " " <> toLogStr (show $ httpVersion req) <>
+    " " <> (if isSecure req then "(tls) " else "")
+    <> toLogStr (show $ remoteHost req)
   where
     isConnect = requestMethod req == "CONNECT"
     isGet = "http://" `BS.isPrefixOf` rawPathInfo req
