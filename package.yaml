@@ -31,6 +31,7 @@ dependencies:
 - http-client-tls >= 0.3.4
 - http-reverse-proxy >= 0.4.0
 - http-types >= 0.12
+- http2 >= 4.0
 - optparse-applicative >= 0.14
 - random >= 1.2.1
 - tls >= 1.5

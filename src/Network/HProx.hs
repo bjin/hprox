@@ -28,22 +28,24 @@ import Network.TLS.Extra.Cipher    qualified as TLS
 import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
-    (defaultSettings, defaultShouldDisplayException, runSettings,
-    setBeforeMainLoop, setHost, setLogger, setNoParsePath, setOnException,
-    setPort, setServerName)
+    (InvalidRequest (..), defaultSettings, defaultShouldDisplayException,
+    runSettings, setBeforeMainLoop, setHost, setLogger, setNoParsePath,
+    setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
-    tlsServerHooks, tlsSessionManager, tlsSettings)
+    (OnInsecure (..), WarpTLSException, onInsecure, runTLS, tlsAllowedVersions,
+    tlsCiphers, tlsServerHooks, tlsSessionManager, tlsSettings)
 import System.Posix.User
     (UserEntry (..), getUserEntryForName, setUserID)
 
-import Control.Exception (Exception (..))
-import GHC.IO.Exception  (IOErrorType (..))
-import System.IO.Error   (ioeGetErrorType)
+import Control.Exception    (Exception (..))
+import GHC.IO.Exception     (IOErrorType (..))
+import Network.HTTP2.Client qualified as H2
+import System.IO.Error      (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
 import Control.Concurrent.Async     (mapConcurrently_)
 import Data.List                    (find)
+import Network.QUIC                 qualified as Q
 import Network.QUIC.Internal        qualified as Q
 import Network.Wai.Handler.Warp     (setAltSvc)
 import Network.Wai.Handler.WarpQUIC (runQUIC)
@@ -234,16 +236,20 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
                    defaultSettings
 
         exceptionHandler req ex
-            | _loglevel > DEBUG                                       = return ()
-            | not (defaultShouldDisplayException ex)                  = return ()
-            | Just (ioeGetErrorType -> EOF) <- fromException ex       = return ()
-            | msg == "ConnectionIsClosed"                             = return ()
-            | "Client closed connection prematurely" `isSuffixOf` msg = return ()
-            | otherwise                                               =
-                logger DEBUG $ "exception: " <> toLogStr msg <>
+            | _loglevel > DEBUG                                 = return ()
+            | not (defaultShouldDisplayException ex)            = return ()
+            | Just (ioeGetErrorType -> EOF) <- fromException ex = return ()
+            | Just (H2.BadThingHappen ex') <- fromException ex  = exceptionHandler req ex'
+            | Just (_ :: H2.HTTP2Error) <- fromException ex     = return ()
+#ifdef QUIC_ENABLED
+            | Just (Q.BadThingHappen ex') <- fromException ex   = exceptionHandler req ex'
+            | Just (_ :: Q.QUICException) <- fromException ex   = return ()
+#endif
+            | Just (_ :: WarpTLSException) <- fromException ex  = return ()
+            | Just ConnectionClosedByPeer <- fromException ex   = return ()
+            | otherwise                                         =
+                logger DEBUG $ "exception: " <> toLogStr (displayException ex) <>
                     (if (isJust req) then " from: " <> logRequest (fromJust req) else "")
-          where
-            msg = displayException ex
 
         warpLogger req status _
             | rawPathInfo req == "/.hprox/health" = return ()
