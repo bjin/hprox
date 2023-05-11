@@ -321,8 +321,8 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
     manager <- newTlsManager
 
     let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL) logger
-        proxy = (if isSSL then forceSSL pset else id) $
-                healthCheckProvider $
+        proxy = healthCheckProvider $
+                (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager $
                 fallback
