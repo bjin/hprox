@@ -1,3 +1,9 @@
+## 0.5.0
+
+- initial HTTP/3 (QUIC) support
+- add logging based on fast-logger
+- some minor tweaks
+
 ## 0.4.0
 
 - naiveproxy compatible [padding](https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification) support (`--naive`)
