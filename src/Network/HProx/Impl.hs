@@ -103,7 +103,7 @@ proxyAuthRequiredResponse ProxySettings{..} = responseKnownLength
 
 pacProvider :: Middleware
 pacProvider fallback req respond
-    | pathInfo req == ["get", "hprox.pac"],
+    | pathInfo req == [".hprox", "config.pac"],
       Just host' <- lookup "x-forwarded-host" (requestHeaders req) <|> requestHeaderHost req =
         let issecure = case lookup "x-forwarded-proto" (requestHeaders req) of
                 Just proto -> proto == "https"
