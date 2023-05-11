@@ -37,6 +37,8 @@ import Network.HTTP.Types.Header  qualified as HT
 import Data.Conduit
 import Data.Maybe
 import Network.Wai
+import Network.Wai.Middleware.Gzip
+import Network.Wai.Middleware.StripHeaders
 
 import Network.HProx.Util
 
@@ -123,14 +125,16 @@ pacProvider fallback req respond
 
 reverseProxy :: ProxySettings -> HC.Manager -> Middleware
 reverseProxy ProxySettings{..} mgr fallback
-    | isReverseProxy = waiProxyToSettings (return.proxyResponseFor) settings mgr
+    | isReverseProxy = appWrapper $ waiProxyToSettings (return.proxyResponseFor) settings mgr
     | otherwise      = fallback
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     isReverseProxy = isJust revRemote
     (revHost, revPort) = parseHostPortWithDefault 80 (fromJust revRemote)
-    revWrapper = if revPort == 443 then WPRModifiedRequestSecure else WPRModifiedRequest
+    (revWrapper, appWrapper)
+        | revPort == 443 = (WPRModifiedRequestSecure, id)
+        | otherwise      = (WPRModifiedRequest, modifyResponse (stripHeaders ["Server", "Date"]))
 
     proxyResponseFor req = revWrapper nreq (ProxyDest revHost revPort)
       where
@@ -145,13 +149,19 @@ reverseProxy ProxySettings{..} mgr fallback
                                      ]
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
-httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
+httpGetProxy pset@ProxySettings{..} mgr fallback = appWrapper $ waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
+    appWrapper = ifRequest isGetProxy (gzip def)
+
+    isGetProxy req = case proxyResponseFor req of
+        WPRModifiedRequest _ _ -> True
+        _                      -> False
+
     proxyResponseFor req
         | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
-        | not isGetProxy             = WPRApplication fallback
+        | not isGETProxy             = WPRApplication fallback
         | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
         | otherwise                  = WPRResponse (proxyAuthRequiredResponse pset)
       where
@@ -169,7 +179,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
         scheme = lookup "X-Scheme" (requestHeaders req)
         isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
 
-        isGetProxy = notCONNECT && (isRawPathProxy || isHTTP2Proxy || isJust hostHeader && hasProxyHeader)
+        isGETProxy = notCONNECT && (isRawPathProxy || isHTTP2Proxy || isJust hostHeader && hasProxyHeader)
 
         nreq = req
           { rawPathInfo = newRawPath

@@ -15,23 +15,21 @@ module Network.HProx
   , run
   ) where
 
-import Data.ByteString.Char8               qualified as BS8
-import Data.List                           (isSuffixOf, (\\))
-import Data.String                         (fromString)
-import Data.Version                        (showVersion)
-import Network.HTTP.Client.TLS             (newTlsManager)
-import Network.TLS                         qualified as TLS
-import Network.TLS.Extra.Cipher            qualified as TLS
-import Network.TLS.SessionManager          qualified as SM
-import Network.Wai                         (Application, modifyResponse)
+import Data.ByteString.Char8       qualified as BS8
+import Data.List                   (isSuffixOf, (\\))
+import Data.String                 (fromString)
+import Data.Version                (showVersion)
+import Network.HTTP.Client.TLS     (newTlsManager)
+import Network.TLS                 qualified as TLS
+import Network.TLS.Extra.Cipher    qualified as TLS
+import Network.TLS.SessionManager  qualified as SM
+import Network.Wai                 (Application)
 import Network.Wai.Handler.Warp
     (defaultSettings, runSettings, setBeforeMainLoop, setHost, setNoParsePath,
     setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), onInsecure, runTLS, tlsAllowedVersions, tlsCiphers,
     tlsServerHooks, tlsSessionManager, tlsSettings)
-import Network.Wai.Middleware.Gzip         (def, gzip)
-import Network.Wai.Middleware.StripHeaders (stripHeaders)
 import System.Posix.User
     (UserEntry (..), getUserEntryForName, setUserID)
 
@@ -264,10 +262,9 @@ run fallback Config{..} = do
 
     let pset = ProxySettings pauth Nothing (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL)
         proxy = (if isSSL then forceSSL pset else id) $
-                modifyResponse (stripHeaders ["Server", "Date"]) $
-                gzip def $
                 httpProxy pset manager $
-                reverseProxy pset manager fallback
+                reverseProxy pset manager $
+                fallback
 
     case _doh of
         Nothing  -> runner proxy
