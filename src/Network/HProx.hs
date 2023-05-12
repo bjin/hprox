@@ -12,6 +12,7 @@
 module Network.HProx
   ( CertFile (..)
   , Config (..)
+  , LogLevel (..)
   , defaultConfig
   , getConfig
   , run

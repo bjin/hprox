@@ -17,6 +17,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import System.Log.FastLogger
 
+-- | Logging level, default value is INFO
 data LogLevel = TRACE
               | DEBUG
               | INFO
