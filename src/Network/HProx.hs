@@ -276,14 +276,12 @@ run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
             , tlsSessionManager  = Just smgr
             }
 
-        logAndFail msg = logger WARN (toLogStr msg) >> fail msg
-
-        onSNI Nothing = logAndFail "SNI: unspecified"
+        onSNI Nothing = fail "SNI: unspecified"
         onSNI (Just host)
           | checkSNI host primaryHost = return mempty
           | otherwise                 = lookupSNI host otherCerts
 
-        lookupSNI host [] = logAndFail ("SNI: unknown hostname (" ++ show host ++ ")")
+        lookupSNI host [] = fail ("SNI: unknown hostname (" ++ show host ++ ")")
         lookupSNI host ((p, cert) : cs)
           | checkSNI host p = return (TLS.Credentials [cert])
           | otherwise       = lookupSNI host cs
