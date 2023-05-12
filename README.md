@@ -54,7 +54,7 @@ hprox -p 8080 -a userpass.txt
 hprox -p 443 -s example.com:$HOME/.acme.sh/example.com/fullchain.cer:$HOME/.acme.sh/example.com/example.com.key
 ```
 
-Browsers can be configured with PAC file URL `https://example.com/.hprox/proxy.pac`.
+Browsers can be configured with PAC file URL `https://example.com/.hprox/config.pac`.
 
 * To work with `v2ray-plugin`, with fallback page to [ubuntu archive](http://archive.ubuntu.com/):
 
