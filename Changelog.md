@@ -1,3 +1,8 @@
+## 0.5.1
+
+- export `LogLevel` type to make `Config` actually customizable
+- add `--log` option to specify logging type
+
 ## 0.5.0
 
 - initial HTTP/3 (QUIC) support
