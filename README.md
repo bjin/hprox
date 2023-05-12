@@ -71,6 +71,8 @@ Clients will be able to connect with plugin option `tls;host=example.com`.
 hprox -p 443 -q 8443 -s example.com:fullchain.pem:privkey.pem -a userpass.txt --naive --doh 8.8.8.8
 ```
 
+Then DoH can be accessed at `https://example.com/dns-query`.
+
 ### Known Issue
 
 * Passwords are currently stored in plain text, please set permission accordingly and
