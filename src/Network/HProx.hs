@@ -73,6 +73,7 @@ data Config = Config
   , _doh      :: Maybe String
   , _naive    :: Bool
   , _name     :: BS8.ByteString
+  , _log      :: String
   , _loglevel :: LogLevel
 #ifdef QUIC_ENABLED
   , _quic     :: Maybe Int
@@ -81,7 +82,7 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox" INFO
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox" "stdout" INFO
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -121,6 +122,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> doh
                     <*> naive
                     <*> name
+                    <*> logging
                     <*> loglevel
 #ifdef QUIC_ENABLED
                     <*> quic
@@ -184,6 +186,13 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> showDefault
        <> help "specify the server name for the 'Server' header")
 
+    logging = strOption
+        ( long "log"
+       <> metavar "<none|stdout|stderr|file>"
+       <> value "stdout"
+       <> showDefault
+       <> help "specify the logging type")
+
     loglevel = option (maybeReader logLevelReader)
         ( long "loglevel"
        <> metavar "<trace|debug|info|warn|error|none>"
@@ -201,6 +210,12 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
 setuid :: String -> IO ()
 setuid user = getUserEntryForName user >>= setUserID . userID
 
+getLoggerType :: String -> LogType' LogStr
+getLoggerType "none"   = LogNone
+getLoggerType "stdout" = LogStdout 4096
+getLoggerType "stderr" = LogStderr 4096
+getLoggerType file     = LogFileNoRotate file 4096
+
 -- | Read 'Config' from command line arguments
 getConfig :: IO Config
 getConfig = execParser parser
@@ -209,7 +224,7 @@ getConfig = execParser parser
 run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
-run fallback Config{..} = withLogger (LogStdout 4096) _loglevel $ \logger -> do
+run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
     logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
 
