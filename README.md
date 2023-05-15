@@ -25,8 +25,7 @@
 
 ### Installation
 
-`hprox` should build and work on all unix-like OS with `ghc` support, but it's only
-been tested on Linux and macOS.
+`hprox` should build and work on all unix-like OS with `ghc` support, as well as Windows.
 
 [stack](https://docs.haskellstack.org/en/stable/README/#how-to-install) is recommended to build `hprox`.
 

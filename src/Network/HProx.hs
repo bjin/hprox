@@ -30,13 +30,11 @@ import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
     (InvalidRequest (..), defaultSettings, defaultShouldDisplayException,
-    runSettings, setBeforeMainLoop, setHost, setLogger, setNoParsePath,
-    setOnException, setPort, setServerName)
+    runSettings, setHost, setLogger, setNoParsePath, setOnException, setPort,
+    setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure (..), WarpTLSException, onInsecure, runTLS, tlsAllowedVersions,
     tlsCiphers, tlsServerHooks, tlsSessionManager, tlsSettings)
-import System.Posix.User
-    (UserEntry (..), getUserEntryForName, setUserID)
 
 import Control.Exception    (Exception (..))
 import GHC.IO.Exception     (IOErrorType (..))
@@ -66,7 +64,6 @@ data Config = Config
   { _bind     :: Maybe String
   , _port     :: Int
   , _ssl      :: [(String, CertFile)]
-  , _user     :: Maybe String
   , _auth     :: Maybe FilePath
   , _ws       :: Maybe String
   , _rev      :: Maybe String
@@ -82,7 +79,7 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing Nothing False "hprox" "stdout" INFO
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing False "hprox" "stdout" INFO
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -115,7 +112,6 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
     config = Config <$> bind
                     <*> port
                     <*> ssl
-                    <*> user
                     <*> auth
                     <*> ws
                     <*> rev
@@ -147,12 +143,6 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> short 's'
        <> metavar "hostname:cerfile:keyfile"
        <> help "enable TLS and specify a domain and associated TLS certificate (can be specified multiple times for multiple domains)")
-
-    user = optional $ strOption
-        ( long "user"
-       <> short 'u'
-       <> metavar "nobody"
-       <> help "setuid after binding port")
 
     auth = optional $ strOption
         ( long "auth"
@@ -207,9 +197,6 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> help "enable QUIC (HTTP/3) on UDP port")
 #endif
 
-setuid :: String -> IO ()
-setuid user = getUserEntryForName user >>= setUserID . userID
-
 getLoggerType :: String -> LogType' LogStr
 getLoggerType "none"   = LogNone
 getLoggerType "stdout" = LogStdout 4096
@@ -248,7 +235,6 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                    setOnException exceptionHandler $
                    setNoParsePath True $
                    setServerName _name $
-                   maybe id (setBeforeMainLoop . setuid) _user
                    defaultSettings
 
         exceptionHandler req ex

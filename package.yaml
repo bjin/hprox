@@ -36,7 +36,6 @@ dependencies:
 - random >= 1.2.1
 - tls >= 1.5
 - tls-session-manager >= 0.0.4
-- unix >= 2.7
 - wai >= 3.2.2
 - wai-extra >= 3.0
 - warp >= 3.2.8
