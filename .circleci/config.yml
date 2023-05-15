@@ -8,6 +8,7 @@ jobs:
       - STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v2.9.3/stack-2.9.3-linux-x86_64-static.tar.gz
       - DOCKER_REPO: bjin/stack-docker:9.4.5
       - DOCKER_EXE: image
+      - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
       - run:
@@ -17,21 +18,21 @@ jobs:
             docker pull "$DOCKER_REPO"
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-{{ arch }}-{{ checksum "stack.yaml" }}
+          key: cci-hprox-x86_64-{{ checksum "stack.yaml" }}
       - run:
           name: Workaround for OOM (build http-reverse-proxy first)
           command: |
             ./stack \
-                --no-interleaved-output --system-ghc --no-install-ghc \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
                 --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                build http-reverse-proxy --flag hprox:static --flag hprox:quic --ghc-options -split-sections --ghc-options -O2
+                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
             ./stack \
-                --no-interleaved-output --system-ghc --no-install-ghc \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
                 --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                install --flag hprox:static --flag hprox:quic --ghc-options -split-sections --ghc-options -O2
+                install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
           command: |
@@ -43,7 +44,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-{{ arch }}-{{ checksum "stack.yaml" }}
+          key: cci-hprox-x86_64-{{ checksum "stack.yaml" }}
           paths:
             - ~/.stack
   build-aarch64:
@@ -54,6 +55,7 @@ jobs:
       - STACK_BIN_URL: https://github.com/bjin/stack-aarch64-static/releases/download/v2.9.3/stack-2.9.3-linux-aarch64-static.tar.gz
       - DOCKER_REPO: bjin/stack-docker-aarch64:9.4.5
       - DOCKER_EXE: image
+      - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
       - run:
@@ -63,21 +65,21 @@ jobs:
             docker pull "$DOCKER_REPO"
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-{{ arch }}-{{ checksum "stack.yaml" }}
+          key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
       - run:
           name: Workaround for OOM (build http-reverse-proxy first)
           command: |
             ./stack \
-                --no-interleaved-output --system-ghc --no-install-ghc \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
                 --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                build http-reverse-proxy --flag hprox:static --flag hprox:quic --ghc-options -split-sections --ghc-options -O2
+                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
             ./stack \
-                --no-interleaved-output --system-ghc --no-install-ghc \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
                 --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                install --flag hprox:static --flag hprox:quic --ghc-options -split-sections --ghc-options -O2
+                install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
           command: |
@@ -89,7 +91,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-{{ arch }}-{{ checksum "stack.yaml" }}
+          key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
           paths:
             - ~/.stack
 workflows:
