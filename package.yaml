@@ -91,6 +91,6 @@ executables:
     - -with-rtsopts=-N
     when:
     - condition: flag(static)
-      ghc-options: -optl-static -split-sections
+      ghc-options: -optl-static
     dependencies:
     - hprox
