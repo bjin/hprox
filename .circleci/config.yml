@@ -52,7 +52,7 @@ jobs:
       image: ubuntu-2004:current
     resource_class: arm.medium
     environment:
-      - STACK_BIN_URL: https://github.com/bjin/stack-aarch64-static/releases/download/v2.9.3/stack-2.9.3-linux-aarch64-static.tar.gz
+      - STACK_BIN_URL: https://github.com/bjin/stack-aarch64-static/releases/download/v2.9.3-2/stack-2.9.3-linux-aarch64-static.tar.gz
       - DOCKER_REPO: bjin/stack-docker-aarch64:9.4.5
       - DOCKER_EXE: image
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
@@ -94,8 +94,56 @@ jobs:
           key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
           paths:
             - ~/.stack
+  build-windows:
+    machine:
+      image: windows-server-2022-gui:current
+      shell: bash.exe
+    resource_class: windows.medium
+    environment:
+      - STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v2.9.3/stack-2.9.3-windows-x86_64.zip
+      - GHC_OPTIONS: --ghc-options -O --ghc-options -optc-Os
+    steps:
+      - checkout
+      - restore_cache:
+          name: Restore Cached Dependencies
+          key: cci-hprox-win-{{ checksum "stack.yaml" }}
+      - run:
+          name: Prepare environment
+          command: |
+            curl -o ./stack.zip -L "$STACK_BIN_URL"
+            7z x stack.zip stack.exe
+            rm -f stack.zip
+            ./stack.exe --skip-msys \
+                setup
+      - run:
+          name: Workaround for OOM (build http-reverse-proxy first)
+          command: |
+            ./stack.exe --skip-msys \
+                --no-terminal --no-interleaved-output \
+                build http-reverse-proxy --flag hprox:quic $GHC_OPTIONS
+      - run:
+          name: Build
+          command: |
+            ./stack.exe --skip-msys \
+                --no-terminal --no-interleaved-output \
+                install --flag hprox:quic $GHC_OPTIONS
+      - run:
+          name: Package executable
+          command: |
+            mkdir ~/release
+            7z a -tzip "$HOME/release/hprox-$(git describe --tags | sed 's/^v//;s/-\([^-]*-g\)/-r\1/')-windows-x86_64.zip" \
+                "$HOME/AppData/Roaming/local/bin/hprox.exe"
+      - store_artifacts:
+          path: ~/release
+          destination: release
+      - save_cache:
+          name: Cache Dependencies
+          key: cci-hprox-win-{{ checksum "stack.yaml" }}
+          paths:
+            - ~/AppData/Roaming/stack
 workflows:
   build:
     jobs:
       - build-x86_64
       - build-aarch64
+      - build-windows
