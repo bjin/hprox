@@ -1,3 +1,8 @@
+## 0.5.2
+
+- add Windows build
+- remove `--user` option
+
 ## 0.5.1
 
 - export `LogLevel` type to make `Config` actually customizable
