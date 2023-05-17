@@ -46,12 +46,13 @@ import Network.HProx.Log
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
-  { proxyAuth    :: Maybe (BS.ByteString -> Bool)
-  , passPrompt   :: Maybe BS.ByteString
-  , wsRemote     :: Maybe BS.ByteString
-  , revRemote    :: Maybe BS.ByteString
-  , naivePadding :: Bool
-  , logger       :: Logger
+  { proxyAuth     :: Maybe (BS.ByteString -> Bool)
+  , passPrompt    :: Maybe BS.ByteString
+  , wsRemote      :: Maybe BS.ByteString
+  , revRemote     :: Maybe BS.ByteString
+  , hideProxyAuth :: Bool
+  , naivePadding  :: Bool
+  , logger        :: Logger
   }
 
 logRequest :: Request -> LogStr
@@ -188,6 +189,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = appWrapper $ waiProxyToSettin
         | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
         | not isGETProxy             = WPRApplication fallback
         | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
+        | hideProxyAuth              = WPRApplication fallback
         | otherwise                  =
             pureLogger logger WARN ("unauthorized request: " <> logRequest req) $
             WPRResponse (proxyAuthRequiredResponse pset)
@@ -224,6 +226,7 @@ httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req respond
     | not isConnectProxy = fallback req respond
     | checkAuth pset req = respondResponse
+    | hideProxyAuth      = fallback req respond
     | otherwise          = do
         logger WARN $ "unauthorized request: " <> logRequest req
         respond (proxyAuthRequiredResponse pset)

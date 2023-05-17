@@ -68,6 +68,7 @@ data Config = Config
   , _ws       :: Maybe String
   , _rev      :: Maybe String
   , _doh      :: Maybe String
+  , _hide     :: Bool
   , _naive    :: Bool
   , _name     :: BS8.ByteString
   , _log      :: String
@@ -79,7 +80,7 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing False "hprox" "stdout" INFO
+defaultConfig = Config Nothing 3000 [] Nothing Nothing Nothing Nothing False False "hprox" "stdout" INFO
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -116,6 +117,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> ws
                     <*> rev
                     <*> doh
+                    <*> hide
                     <*> naive
                     <*> name
                     <*> logging
@@ -164,6 +166,10 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         ( long "doh"
        <> metavar "dns-server:port"
        <> help "enable DNS-over-HTTPS(DoH) support (53 will be used if port is not specified)")
+
+    hide = switch
+        ( long "hide"
+       <> help "never send 'proxy authentication required' response (however this might break the use of HTTPS proxy in browser)")
 
     naive = switch
         ( long "naive"
@@ -326,7 +332,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) (_naive && isSSL) logger
+    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (BS8.pack <$> _rev) _hide (_naive && isSSL) logger
         proxy = healthCheckProvider $
                 (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
