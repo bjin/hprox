@@ -240,8 +240,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                    setLogger warpLogger $
                    setOnException exceptionHandler $
                    setNoParsePath True $
-                   setServerName _name $
-                   defaultSettings
+                   setServerName _name defaultSettings
 
         exceptionHandler req ex
             | _loglevel > DEBUG                                 = return ()
@@ -257,7 +256,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             | Just ConnectionClosedByPeer <- fromException ex   = return ()
             | otherwise                                         =
                 logger DEBUG $ "exception: " <> toLogStr (displayException ex) <>
-                    (if (isJust req) then " from: " <> logRequest (fromJust req) else "")
+                    (if isJust req then " from: " <> logRequest (fromJust req) else "")
 
         warpLogger req status _
             | rawPathInfo req == "/.hprox/health" = return ()
@@ -336,8 +335,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         proxy = healthCheckProvider $
                 (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
-                reverseProxy pset manager $
-                fallback
+                reverseProxy pset manager fallback
 
     when (isJust _ws) $ logger INFO $ "websocket redirect: " <> toLogStr (fromJust _ws)
     when (isJust _rev) $ logger INFO $ "reverse proxy: " <> toLogStr (fromJust _rev)
