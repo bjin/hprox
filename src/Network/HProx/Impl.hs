@@ -182,7 +182,9 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
         | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
         | not isGETProxy             = WPRApplication fallback
         | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
-        | hideProxyAuth              = WPRApplication fallback
+        | hideProxyAuth              =
+            pureLogger logger WARN ("unauthorized request (hidden without response): " <> logRequest req) $
+            WPRApplication fallback
         | otherwise                  =
             pureLogger logger WARN ("unauthorized request: " <> logRequest req) $
             WPRResponse (proxyAuthRequiredResponse pset)
@@ -219,7 +221,9 @@ httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req respond
     | not isConnectProxy = fallback req respond
     | checkAuth pset req = respondResponse
-    | hideProxyAuth      = fallback req respond
+    | hideProxyAuth      = do
+        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+        fallback req respond
     | otherwise          = do
         logger WARN $ "unauthorized request: " <> logRequest req
         respond (proxyAuthRequiredResponse pset)
