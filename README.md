@@ -1,6 +1,7 @@
 ## hprox
 
 [![CircleCI](https://circleci.com/gh/bjin/hprox.svg?style=shield)](https://circleci.com/gh/bjin/hprox)
+[![CirrusCI](https://api.cirrus-ci.com/github/bjin/hprox.svg)](https://cirrus-ci.com/github/bjin/hprox)
 [![Depends](https://img.shields.io/hackage-deps/v/hprox.svg)](https://packdeps.haskellers.com/feed?needle=hprox)
 [![Release](https://img.shields.io/github/release/bjin/hprox.svg)](https://github.com/bjin/hprox/releases)
 [![Hackage](https://img.shields.io/hackage/v/hprox.svg)](https://hackage.haskell.org/package/hprox)
