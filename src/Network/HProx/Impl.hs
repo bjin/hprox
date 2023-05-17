@@ -15,7 +15,7 @@ module Network.HProx.Impl
   ) where
 
 import Control.Applicative        ((<|>))
-import Control.Concurrent.Async   (concurrently)
+import Control.Concurrent.Async   (cancel, wait, waitEither, withAsync)
 import Control.Exception          (SomeException, try)
 import Control.Monad              (unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
@@ -35,6 +35,7 @@ import Network.HTTP.ReverseProxy
     wpsUpgradeToRaw)
 import Network.HTTP.Types         qualified as HT
 import Network.HTTP.Types.Header  qualified as HT
+import System.Timeout             (timeout)
 
 import Data.Conduit
 import Data.Maybe
@@ -240,6 +241,17 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
     tryAndCatchAll :: IO a -> IO (Either SomeException a)
     tryAndCatchAll = try
 
+    runStreams :: Int -> IO () -> IO () -> IO (Either SomeException ())
+    runStreams secs left right = tryAndCatchAll $
+        withAsync left $ \l -> do
+            withAsync right $ \r -> do
+                res1 <- waitEither l r
+                let unfinished = case res1 of
+                        Left _ -> r
+                        _      -> l
+                res2 <- timeout (secs * 1000000) (wait unfinished)
+                when (isNothing res2) $ cancel unfinished
+
     respondResponse
         | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect True) backup
         | not naivePadding                   = respond $ responseStream HT.status200 [] streaming
@@ -311,6 +323,7 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
                            | otherwise        = fromServer .| toClient
         in do
             when http1 $ runConduit $ yieldHttp1Response .| toClient
-            void $ tryAndCatchAll $ concurrently
+            -- gracefully close the other stream after 5 seconds if one side of stream is closed.
+            void $ runStreams 5
                 (runConduit clientToServer)
                 (runConduit serverToClient)
