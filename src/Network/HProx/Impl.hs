@@ -39,7 +39,6 @@ import Network.HTTP.Types.Header  qualified as HT
 import Data.Conduit
 import Data.Maybe
 import Network.Wai
-import Network.Wai.Middleware.Gzip
 import Network.Wai.Middleware.StripHeaders
 
 import Network.HProx.Log
@@ -175,15 +174,9 @@ reverseProxy ProxySettings{..} mgr fallback
                                      ]
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
-httpGetProxy pset@ProxySettings{..} mgr fallback = appWrapper $ waiProxyToSettings (return.proxyResponseFor) settings mgr
+httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
-
-    appWrapper = ifRequest isGetProxy (gzip def)
-
-    isGetProxy req = case proxyResponseFor req of
-        WPRModifiedRequest _ _ -> True
-        _                      -> False
 
     proxyResponseFor req
         | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
