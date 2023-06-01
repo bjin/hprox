@@ -103,11 +103,14 @@ checkAuth :: ProxySettings -> Request -> Bool
 checkAuth ProxySettings{..} req
     | isNothing proxyAuth = True
     | isNothing authRsp   = False
-    | otherwise           = fromJust proxyAuth decodedRsp
+    | otherwise           =
+        pureLogger logger TRACE (authMsg <> " request (credential: " <> toLogStr decodedRsp <> ") from " <> toLogStr (show (remoteHost req))) authorized
   where
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
-
     decodedRsp = decodeLenient $ snd $ BS8.spanEnd (/=' ') $ fromJust authRsp
+
+    authorized = fromJust proxyAuth decodedRsp
+    authMsg = if authorized then "authorized" else "unauthorized"
 
 redirectWebsocket :: ProxySettings -> Request -> Bool
 redirectWebsocket ProxySettings{..} req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust wsRemote
