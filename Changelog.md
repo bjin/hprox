@@ -1,3 +1,10 @@
+## 0.5.3
+
+- add macos-aarch64 build
+- add `--hide` option for probe resistance
+- gracefully close stream for HTTP CONNECT
+- `gzip` encoding middleware removed
+
 ## 0.5.2
 
 - add Windows build
