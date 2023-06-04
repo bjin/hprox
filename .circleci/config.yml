@@ -5,7 +5,7 @@ jobs:
       image: ubuntu-2004:current
     resource_class: medium
     environment:
-      - STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v2.9.3/stack-2.9.3-linux-x86_64-static.tar.gz
+      - STACK_VER: 2.11.1
       - DOCKER_REPO: bjin/stack-docker:9.4.5
       - DOCKER_EXE: image
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
@@ -14,6 +14,7 @@ jobs:
       - run:
           name: Prepare environment
           command: |
+            export STACK_BIN_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-linux-x86_64-static.tar.gz"
             curl -L "$STACK_BIN_URL" | tar xz --wildcards --strip-components=1 '*/stack'
             docker pull "$DOCKER_REPO"
       - restore_cache:
@@ -52,7 +53,7 @@ jobs:
       image: ubuntu-2004:current
     resource_class: arm.medium
     environment:
-      - STACK_BIN_URL: https://github.com/bjin/stack-aarch64-static/releases/download/v2.9.3-2/stack-2.9.3-linux-aarch64-static.tar.gz
+      - STACK_VER: 2.11.1
       - DOCKER_REPO: bjin/stack-docker-aarch64:9.4.5
       - DOCKER_EXE: image
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
@@ -61,6 +62,7 @@ jobs:
       - run:
           name: Prepare environment
           command: |
+            export STACK_BIN_URL="https://github.com/bjin/stack-aarch64-static/releases/download/v${STACK_VER}/stack-${STACK_VER}-linux-aarch64-static.tar.gz"
             curl -L "$STACK_BIN_URL" | tar xz
             docker pull "$DOCKER_REPO"
       - restore_cache:
@@ -100,7 +102,7 @@ jobs:
       shell: bash.exe
     resource_class: windows.medium
     environment:
-      - STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v2.9.3/stack-2.9.3-windows-x86_64.zip
+      - STACK_VER: 2.11.1
       - GHC_OPTIONS: --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -110,6 +112,7 @@ jobs:
       - run:
           name: Prepare environment
           command: |
+            export STACK_BIN_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-windows-x86_64.zip"
             curl -o ./stack.zip -L "$STACK_BIN_URL"
             7z x stack.zip stack.exe
             rm -f stack.zip
