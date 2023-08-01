@@ -49,7 +49,7 @@ data ProxySettings = ProxySettings
   { proxyAuth     :: Maybe (BS.ByteString -> Bool)
   , passPrompt    :: Maybe BS.ByteString
   , wsRemote      :: Maybe BS.ByteString
-  , revRemote     :: Maybe BS.ByteString
+  , revRemoteMap  :: [(BS.ByteString, BS.ByteString)]
   , hideProxyAuth :: Bool
   , naivePadding  :: Bool
   , logger        :: Logger
@@ -153,29 +153,32 @@ healthCheckProvider fallback req respond
     | otherwise = fallback req respond
 
 reverseProxy :: ProxySettings -> HC.Manager -> Middleware
-reverseProxy ProxySettings{..} mgr fallback
-    | isReverseProxy = appWrapper $ waiProxyToSettings (return.proxyResponseFor) settings mgr
-    | otherwise      = fallback
+reverseProxy ProxySettings{..} mgr fallback =
+    modifyResponse (stripHeaders ["Server", "Date"]) $
+        waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
-    isReverseProxy = isJust revRemote
-    (revHost, revPort) = parseHostPortWithDefault 80 (fromJust revRemote)
-    (revWrapper, appWrapper)
-        | revPort == 443 = (WPRModifiedRequestSecure, id)
-        | otherwise      = (WPRModifiedRequest, modifyResponse (stripHeaders ["Server", "Date"]))
-
-    proxyResponseFor req = revWrapper nreq (ProxyDest revHost revPort)
+    proxyResponseFor req = go revRemoteMap
       where
-        nreq = req
-          { requestHeaders = hdrs
-          , requestHeaderHost = Just revHost
-          }
-
-        hdrs = (HT.hHost, revHost) : [ (hdn, hdv)
-                                     | (hdn, hdv) <- requestHeaders req
-                                     , not (isToStripHeader hdn) && hdn /= HT.hHost
-                                     ]
+        go ((prefix, revRemote):left)
+          | prefix `BS.isPrefixOf` (rawPathInfo req) =
+            if revPort == 443
+                then WPRModifiedRequestSecure nreq (ProxyDest revHost revPort)
+                else WPRModifiedRequest nreq (ProxyDest revHost revPort)
+          | otherwise = go left
+          where
+            (revHost, revPort) = parseHostPortWithDefault 80 revRemote
+            nreq = req
+              { requestHeaders = hdrs
+              , requestHeaderHost = Just revHost
+              , rawPathInfo = BS.drop (BS.length prefix - 1) (rawPathInfo req)
+              }
+            hdrs = (HT.hHost, revHost) : [ (hdn, hdv)
+                                         | (hdn, hdv) <- requestHeaders req
+                                         , not (isToStripHeader hdn) && hdn /= HT.hHost
+                                         ]
+        go _ = WPRApplication fallback
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
 httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr

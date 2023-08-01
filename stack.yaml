@@ -1,4 +1,4 @@
-resolver: lts-21.1
+resolver: lts-21.5
 packages:
 - '.'
 extra-deps:
@@ -13,7 +13,7 @@ extra-deps:
 - sockaddr-0.0.1
 - warp-quic-0.0.0
 # crypton packages
-- crypton-0.32
+- crypton-0.33
 - crypton-connection-0.3.1
 - crypton-x509-1.7.6
 - crypton-x509-store-1.6.9
@@ -21,7 +21,7 @@ extra-deps:
 - crypton-x509-validation-1.6.12
 - dns-4.2.0
 - http-client-tls-0.3.6.2
-- tls-1.7.0
+- tls-1.7.1
 - warp-tls-3.4.0
 drop-packages:
 - cryptonite
