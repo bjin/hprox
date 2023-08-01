@@ -162,7 +162,7 @@ reverseProxy ProxySettings{..} mgr fallback =
     proxyResponseFor req = go revRemoteMap
       where
         go ((prefix, revRemote):left)
-          | prefix `BS.isPrefixOf` (rawPathInfo req) =
+          | prefix `BS.isPrefixOf` rawPathInfo req =
             if revPort == 443
                 then WPRModifiedRequestSecure nreq (ProxyDest revHost revPort)
                 else WPRModifiedRequest nreq (ProxyDest revHost revPort)

@@ -337,14 +337,14 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (sortOn (negate.(BS8.length).fst) _rev) _hide (_naive && isSSL) logger
+    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (sortOn (negate.BS8.length.fst) _rev) _hide (_naive && isSSL) logger
         proxy = healthCheckProvider $
                 (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager fallback
 
     when (isJust _ws) $ logger INFO $ "websocket redirect: " <> toLogStr (fromJust _ws)
-    when (not $ null _rev) $ logger INFO $ "reverse proxy: " <> toLogStr (show $ _rev)
+    unless (null _rev) $ logger INFO $ "reverse proxy: " <> toLogStr (show _rev)
     when (isJust _doh) $ logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr (fromJust _doh)
 
     case _doh of
