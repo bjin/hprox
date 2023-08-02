@@ -154,7 +154,7 @@ healthCheckProvider fallback req respond
 
 reverseProxy :: ProxySettings -> HC.Manager -> Middleware
 reverseProxy ProxySettings{..} mgr fallback =
-    modifyResponse (stripHeaders ["Server", "Date"]) $
+    modifyResponse (stripHeaders ["Server", "Date", "Keep-Alive"]) $
         waiProxyToSettings (return.proxyResponseFor) settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
