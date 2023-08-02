@@ -29,3 +29,6 @@ flags:
   hprox:
     quic: true
 apply-ghc-options: everything
+nix:
+  packages:
+  - zlib
