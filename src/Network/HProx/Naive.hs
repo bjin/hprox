@@ -39,8 +39,8 @@ randomPadding = applyAtomicGen generate globalStdGen
             return $ nonHuffman !! idx
         return (BS8.pack (prefix ++ replicate (len - 24) '~'))
 
-randomPaddingLength :: IO Int
-randomPaddingLength = applyAtomicGen (uniformR (1, 255)) globalStdGen
+randInt :: Int -> Int -> IO Int
+randInt minv maxv = applyAtomicGen (uniformR (minv, maxv)) globalStdGen
 
 -- https://github.com/klzgrad/naiveproxy/blob/master/src/net/tools/naive/naive_protocol.h#L30C12-L30C23
 data PaddingType = NoPadding
@@ -104,11 +104,15 @@ addPaddingVariant1 n = do
         Nothing -> return ()
         Just bs | BS.null bs -> return ()
         Just bs -> do
-            let maximumLengthVariant1 = 65535 - 3 - 255
-                (bs0, bs1) = BS.splitAt maximumLengthVariant1 bs
+            let remaining = min (BS.length bs) (65535 - 3 - 255)
+            toConsume <- if remaining > 400 && remaining < 1024
+                         then liftIO $ randInt 200 300
+                         else return remaining
+            let (bs0, bs1) = BS.splitAt toConsume bs
             unless (BS.null bs1) $ leftover bs1
             let len = BS.length bs0
-            paddingLen <- liftIO randomPaddingLength
+                minPaddingLen = if len < 100 then 255 - len else 1
+            paddingLen <- liftIO $ randInt minPaddingLen 255
             let header = mconcat (map (BB.singleton.fromIntegral) [len `div` 256, len `mod` 256, paddingLen])
                 body   = BB.fromByteString bs0
                 tailer = BB.fromByteString (BS.replicate paddingLen 0)
