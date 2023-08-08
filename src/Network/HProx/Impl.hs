@@ -26,7 +26,6 @@ import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive       qualified as CI
-import Data.Conduit.Binary        qualified as CB
 import Data.Conduit.Network       qualified as CN
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
@@ -43,6 +42,7 @@ import Network.Wai
 import Network.Wai.Middleware.StripHeaders
 
 import Network.HProx.Log
+import Network.HProx.Naive
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
@@ -227,7 +227,9 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req respond
     | not isConnectProxy = fallback req respond
-    | checkAuth pset req = respondResponse
+    | checkAuth pset req = do
+        when (isJust mPaddingType) $ logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show (fromJust mPaddingType)) <> " for " <> logRequest req
+        respondResponse
     | hideProxyAuth      = do
         logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
         fallback req respond
@@ -258,60 +260,24 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
                 res2 <- timeout (secs * 1000000) (wait unfinished)
                 when (isNothing res2) $ cancel unfinished
 
+    mPaddingType = if naivePadding then parseRequestForPadding req else Nothing
+
     respondResponse
         | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect True) backup
-        | not naivePadding                   = respond $ responseStream HT.status200 [] streaming
         | otherwise                          = do
-            padding <- randomPadding
-            respond $ responseStream HT.status200 [("Padding", padding)] streaming
+            paddingHeaders <- liftIO $ prepareResponseForPadding mPaddingType
+            respond $ responseStream HT.status200 paddingHeaders streaming
       where
         streaming write flush = do
             flush
             handleConnect False (getRequestBodyChunk req) (\bs -> write (BB.fromByteString bs) >> flush)
 
-    maximumLength = 65535 - 3 - 255
-    countPaddings = 8
-
-    addStreamPadding = isJust (lookup "Padding" (requestHeaders req)) && naivePadding
-
-    -- see: https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification
-    addPadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
-    addPadding 0 = awaitForever yield
-    addPadding n = do
-        mbs <- await
-        case mbs of
-            Nothing -> return ()
-            Just bs | BS.null bs -> return ()
-            Just bs -> do
-                let (bs0, bs1) = BS.splitAt maximumLength bs
-                unless (BS.null bs1) $ leftover bs1
-                let len = BS.length bs0
-                paddingLen <- liftIO randomPaddingLength
-                let header = mconcat (map (BB.singleton.fromIntegral) [len `div` 256, len `mod` 256, paddingLen])
-                    body   = BB.fromByteString bs0
-                    tailer = BB.fromByteString (BS.replicate paddingLen 0)
-                yield $ LBS.toStrict $ BB.toLazyByteString (header <> body <> tailer)
-                addPadding (n - 1)
-
-    removePadding :: Int -> ConduitT BS.ByteString BS.ByteString IO ()
-    removePadding 0 = awaitForever yield
-    removePadding n = do
-        header <- CB.take 3
-        case LBS.unpack header of
-            [b0, b1, b2] -> do
-                let len = fromIntegral b0 * 256 + fromIntegral b1
-                    paddingLen = fromIntegral b2
-                bs <- CB.take (fromIntegral (len + paddingLen))
-                if LBS.length bs /= len + paddingLen
-                    then return ()
-                    else yield (LBS.toStrict $ LBS.take len bs) >> removePadding (n - 1)
-            _ -> return ()
-
-    yieldHttp1Response
-        | naivePadding = do
-            padding <- BB.fromByteString <$> liftIO randomPadding
-            yield $ LBS.toStrict $ BB.toLazyByteString ("HTTP/1.1 200 OK\r\nPadding: " <> padding <> "\r\n\r\n")
-        | otherwise    = yield "HTTP/1.1 200 OK\r\n\r\n"
+    yieldHttp1Response = do
+        paddingHeaders <- liftIO $ prepareResponseForPadding mPaddingType
+        let headers = [ BB.fromByteString (CI.original hn) <> ": " <> BB.fromByteString hv <> "\r\n"
+                      | (hn, hv) <- paddingHeaders
+                      ]
+        yield $ LBS.toStrict $ BB.toLazyByteString ("HTTP/1.1 200 OK\r\n" <> mconcat headers <> "\r\n")
 
     handleConnect :: Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
     handleConnect http1 fromClient' toClient' = CN.runTCPClient settings $ \server ->
@@ -322,11 +288,11 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
                 unless (BS.null bs) (yield bs >> fromClient)
             toClient = awaitForever (liftIO . toClient')
 
-            clientToServer | addStreamPadding = fromClient .| removePadding countPaddings .| toServer
-                           | otherwise        = fromClient .| toServer
+            clientToServer | Just padding <- mPaddingType = fromClient .| removePaddingConduit padding .| toServer
+                           | otherwise                    = fromClient .| toServer
 
-            serverToClient | addStreamPadding = fromServer .| addPadding countPaddings .| toClient
-                           | otherwise        = fromServer .| toClient
+            serverToClient | Just padding <- mPaddingType = fromServer .| addPaddingConduit padding .| toClient
+                           | otherwise                    = fromServer .| toClient
         in do
             when http1 $ runConduit $ yieldHttp1Response .| toClient
             -- gracefully close the other stream after 5 seconds if one side of stream is closed.

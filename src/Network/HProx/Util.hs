@@ -5,19 +5,13 @@
 module Network.HProx.Util
   ( parseHostPort
   , parseHostPortWithDefault
-  , randomPadding
-  , randomPaddingLength
   , responseKnownLength
   ) where
 
-import Control.Monad          (replicateM)
-import Data.ByteString        qualified as BS
-import Data.ByteString.Char8  qualified as BS8
-import Data.ByteString.Lazy   qualified as LBS
-import Data.Maybe             (fromMaybe)
-import System.Random          (uniformR)
-import System.Random.Stateful
-    (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
+import Data.ByteString       qualified as BS
+import Data.ByteString.Char8 qualified as BS8
+import Data.ByteString.Lazy  qualified as LBS
+import Data.Maybe            (fromMaybe)
 
 import Network.HTTP.Types (ResponseHeaders, Status)
 import Network.Wai
@@ -35,22 +29,6 @@ parseHostPort hostPort = do
 parseHostPortWithDefault :: Int -> BS.ByteString -> (BS.ByteString, Int)
 parseHostPortWithDefault defaultPort hostPort =
     fromMaybe (hostPort, defaultPort) $ parseHostPort hostPort
-
-randomPadding :: IO BS.ByteString
-randomPadding = applyAtomicGen generate globalStdGen
-  where
-    nonHuffman = "!#$()+<>?@[]^`{}"
-    countNonHuffman = length nonHuffman
-
-    generate g0 = runStateGen g0 $ \gen -> do
-        len <- uniformRM (32, 63) gen
-        prefix <- replicateM 24 $ do
-            idx <- uniformRM (0, countNonHuffman - 1) gen
-            return $ nonHuffman !! idx
-        return (BS8.pack (prefix ++ replicate (len - 24) '~'))
-
-randomPaddingLength :: IO Int
-randomPaddingLength = applyAtomicGen (uniformR (1, 255)) globalStdGen
 
 responseKnownLength :: Status -> ResponseHeaders -> LBS.ByteString -> Response
 responseKnownLength status headers bs = responseLBS status (headers ++ [("Content-Length", BS8.pack $ show (LBS.length bs))]) bs
