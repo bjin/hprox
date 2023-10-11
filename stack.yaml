@@ -1,15 +1,16 @@
-resolver: lts-21.5
+resolver: lts-21.15
 packages:
 - '.'
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.3.28-patched
+  commit: warp-3.3.29-patched
   subdirs:
   - warp
 - crypto-token-0.0.2
-- http3-0.0.4
+- http2-4.2.2 # in nightly
+- http3-0.0.6
 - network-udp-0.0.0
-- quic-0.1.2
+- quic-0.1.7
 - sockaddr-0.0.1
 - warp-quic-0.0.0
 # crypton packages
@@ -20,9 +21,9 @@ extra-deps:
 - crypton-x509-system-1.6.7
 - crypton-x509-validation-1.6.12
 - dns-4.2.0
-- http-client-tls-0.3.6.2
-- tls-1.7.1
-- warp-tls-3.4.0
+- http-client-tls-0.3.6.3
+- tls-1.8.0
+- warp-tls-3.4.3
 drop-packages:
 - cryptonite
 flags:

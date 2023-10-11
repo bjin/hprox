@@ -3,8 +3,8 @@ task:
   macos_instance:
     image: ghcr.io/cirruslabs/macos-ventura-base:latest
   env:
-    STACK_VER: 2.11.1
-    STACK_BIN_URL: https://downloads.haskell.org/ghcup/unofficial-bindists/stack/${STACK_VER}/stack-${STACK_VER}-osx-aarch64.tar.gz
+    STACK_VER: 2.13.1
+    STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-osx-aarch64.tar.gz
   stack_cache:
     folder: ~/.stack
     fingerprint_script:
