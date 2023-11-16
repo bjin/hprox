@@ -1,16 +1,16 @@
-resolver: lts-21.15
+resolver: lts-21.20
 packages:
 - '.'
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.3.29-patched
+  commit: warp-3.3.30-patched
   subdirs:
   - warp
 - crypto-token-0.0.2
 - http2-4.2.2 # in nightly
 - http3-0.0.6
 - network-udp-0.0.0
-- quic-0.1.7
+- quic-0.1.8
 - sockaddr-0.0.1
 - warp-quic-0.0.0
 # crypton packages

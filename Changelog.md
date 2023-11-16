@@ -1,3 +1,10 @@
+## 0.5.4
+
+- routable `--rev` reverse proxy support
+- fix `Keep-Alive` header in reverse HTTP/2 proxy
+- add nix based build mode
+- naiveproxy padding: add protocol negotiation and packet fragmentation 
+
 ## 0.5.3
 
 - add macos-aarch64 build
