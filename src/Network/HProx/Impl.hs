@@ -159,8 +159,8 @@ reverseProxy ProxySettings{..} mgr fallback =
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
-    checkDomain Nothing _ = True
-    checkDomain _ Nothing = False
+    checkDomain Nothing _         = True
+    checkDomain _ Nothing         = False
     checkDomain (Just a) (Just b) = a == b
 
     proxyResponseFor req = go revRemoteMap

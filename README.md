@@ -75,8 +75,6 @@ Then DoH can be accessed at `https://example.com/dns-query`.
 
 ### Known Issue
 
-* Passwords are currently stored in plain text, please set permission accordingly and
-  avoid using existing password.
 * HTTP/3 currently only works on the first domain as specified by `-s/--tls`, also SNI
   validation is unavailable as well.
 

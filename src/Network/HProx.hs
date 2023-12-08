@@ -19,7 +19,8 @@ module Network.HProx
   ) where
 
 import Data.ByteString.Char8       qualified as BS8
-import Data.Ord                    (Down(..))
+import Data.HashMap.Strict         qualified as HM
+import Data.Ord                    (Down (..))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
@@ -57,6 +58,7 @@ import Options.Applicative
 import Network.HProx.DoH
 import Network.HProx.Impl
 import Network.HProx.Log
+import Network.HProx.Util
 import Paths_hprox
 
 -- | Configuration of HProx, see @hprox --help@ for details
@@ -93,12 +95,6 @@ data CertFile = CertFile
 
 readCert :: CertFile -> IO TLS.Credential
 readCert (CertFile c k) = either error id <$> TLS.credentialLoadX509 c k
-
-splitBy :: Eq a => a -> [a] -> [[a]]
-splitBy _ [] = [[]]
-splitBy c (x:xs)
-  | c == x    = [] : splitBy c xs
-  | otherwise = let y:ys = splitBy c xs in (x:y):ys
 
 parser :: ParserInfo Config
 parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
@@ -342,7 +338,28 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         Nothing -> return Nothing
         Just f  -> do
             logger INFO $ "read username and passwords from " <> toLogStr f
-            Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
+            userList <- BS8.lines <$> BS8.readFile f
+            let anyPlaintext = any (\line -> length (BS8.elemIndices ':' line) /= 2) userList
+                processUser userpass = case passwordReader userpass of
+                    Nothing           -> do
+                        logger WARN $ "unable to parse line from password file: " <> toLogStr userpass
+                        return Nothing
+                    Just (user, pass) -> do
+                        salted <- hashPasswordWithRandomSalt pass
+                        logger TRACE $ "parsed user (with salted password) from password file: " <> toLogStr (passwordWriter user salted)
+                        return $ Just (user, salted)
+            passwordByUser <- HM.fromList . catMaybes <$> mapM processUser userList
+            when anyPlaintext $ do
+                logger INFO $ "writing back to password file " <> toLogStr f
+                BS8.writeFile f (BS8.unlines [ passwordWriter u p | (u, p) <- HM.toList passwordByUser])
+            let verify line = do
+                    idx <- BS8.elemIndex ':' line
+                    let user = BS8.take idx line
+                        pass = BS8.drop (idx + 1) line
+                    targetPass <- HM.lookup user passwordByUser
+                    return $ verifyPassword targetPass pass
+            return $ Just (\line -> verify line == Just True)
+
     manager <- newTlsManager
 
     let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
