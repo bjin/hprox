@@ -6,6 +6,8 @@ extra-deps:
   commit: warp-3.3.31-patched
   subdirs:
   - warp
+- github: bjin/http-reverse-proxy
+  commit: ffa76f78d325723726559bf0047f056602a577fd
 - crypto-token-0.0.2
 - http2-5.0.0
 - http3-0.0.7
