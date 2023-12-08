@@ -49,7 +49,7 @@ data ProxySettings = ProxySettings
   { proxyAuth     :: Maybe (BS.ByteString -> Bool)
   , passPrompt    :: Maybe BS.ByteString
   , wsRemote      :: Maybe BS.ByteString
-  , revRemoteMap  :: [(BS.ByteString, BS.ByteString)]
+  , revRemoteMap  :: [(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
   , hideProxyAuth :: Bool
   , naivePadding  :: Bool
   , logger        :: Logger
@@ -159,15 +159,20 @@ reverseProxy ProxySettings{..} mgr fallback =
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
+    checkDomain Nothing _ = True
+    checkDomain _ Nothing = False
+    checkDomain (Just a) (Just b) = a == b
+
     proxyResponseFor req = go revRemoteMap
       where
-        go ((prefix, revRemote):left)
-          | prefix `BS.isPrefixOf` rawPathInfo req =
+        go ((mTargetHost, prefix, revRemote):left)
+          | checkDomain mTargetHost mReqHost && prefix `BS.isPrefixOf` rawPathInfo req =
             if revPort == 443
                 then WPRModifiedRequestSecure nreq (ProxyDest revHost revPort)
                 else WPRModifiedRequest nreq (ProxyDest revHost revPort)
           | otherwise = go left
           where
+            mReqHost = fmap (fst . parseHostPortWithDefault (error "unused port number")) (requestHeaderHost req)
             (revHost, revPort) = parseHostPortWithDefault 80 revRemote
             nreq = req
               { requestHeaders = hdrs

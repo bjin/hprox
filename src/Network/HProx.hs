@@ -19,6 +19,7 @@ module Network.HProx
   ) where
 
 import Data.ByteString.Char8       qualified as BS8
+import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
@@ -42,7 +43,6 @@ import System.IO.Error      (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
 import Control.Concurrent.Async     (mapConcurrently_)
-import Data.List                    (find)
 import Network.QUIC                 qualified as Q
 import Network.QUIC.Internal        qualified as Q
 import Network.Wai.Handler.Warp     (setAltSvc)
@@ -66,7 +66,7 @@ data Config = Config
   , _ssl      :: [(String, CertFile)]
   , _auth     :: Maybe FilePath
   , _ws       :: Maybe String
-  , _rev      :: [(BS8.ByteString, BS8.ByteString)]
+  , _rev      :: [(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
   , _doh      :: Maybe String
   , _hide     :: Bool
   , _naive    :: Bool
@@ -107,11 +107,19 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         [host, cert, key] -> Right (host, CertFile cert key)
         _                 -> Left "invalid format for ssl certificates"
 
-    parseRev s@('/':_) = case elemIndices '/' s of
+    parseRev0 s@('/':_) = case elemIndices '/' s of
         []      -> Nothing
         indices -> let (prefix, remote) = splitAt (last indices + 1) s
-                   in Just (BS8.pack prefix, BS8.pack remote)
-    parseRev remote = Just ("/", BS8.pack remote)
+                   in Just (Nothing, BS8.pack prefix, BS8.pack remote)
+    parseRev0 remote = Just (Nothing, "/", BS8.pack remote)
+
+    parseRev ('/':'/':s) = case elemIndex '/' s of
+        Nothing  -> Nothing
+        Just ind -> let (domain, other) = splitAt ind s
+                    in do (_, prefix, remote) <- parseRev0 other
+                          return (Just (BS8.pack domain), prefix, remote)
+
+    parseRev s = parseRev0 s
 
     desc = "a lightweight HTTP proxy server, and more"
     ver = infoOption (showVersion version) (long "version" <> help "show version")
@@ -165,8 +173,8 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
 
     rev = many $ option (maybeReader parseRev)
         ( long "rev"
-       <> metavar "[/prefix/]remote-host:port"
-       <> help "remote host for reverse proxy (port 443 indicates HTTPS remote server), optional '/prefix/' can be specified as prefix to be matched (and stripped in proxied request)")
+       <> metavar "[//domain/][/prefix/]remote-host:port"
+       <> help "remote host for reverse proxy (port 443 indicates HTTPS remote server), optional '//domain/' will only process requests with 'Host: domain' header, optional '/prefix/' can be specified as prefix to be matched (and stripped in proxied request)")
 
     doh = optional $ strOption
         ( long "doh"
@@ -337,14 +345,15 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             Just . flip elem . filter (isJust . BS8.elemIndex ':') . BS8.lines <$> BS8.readFile f
     manager <- newTlsManager
 
-    let pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) (sortOn (negate.BS8.length.fst) _rev) _hide (_naive && isSSL) logger
+    let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
+        pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) revSorted _hide (_naive && isSSL) logger
         proxy = healthCheckProvider $
                 (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager fallback
 
     when (isJust _ws) $ logger INFO $ "websocket redirect: " <> toLogStr (fromJust _ws)
-    unless (null _rev) $ logger INFO $ "reverse proxy: " <> toLogStr (show _rev)
+    unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
     when (isJust _doh) $ logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr (fromJust _doh)
 
     case _doh of
