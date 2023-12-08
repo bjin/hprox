@@ -118,7 +118,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
     parseRev s = parseRev0 s
 
     desc = "a lightweight HTTP proxy server, and more"
-    ver = infoOption (showVersion version) (long "version" <> help "show version")
+    ver = infoOption (showVersion version) (long "version" <> help "Display the version information")
 
     config = Config <$> bind
                     <*> port
@@ -140,7 +140,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         ( long "bind"
        <> short 'b'
        <> metavar "bind_ip"
-       <> help "ip address to bind on (default: all interfaces)")
+       <> help "Specify the IP address to bind to (default: all interfaces)")
 
     port = option auto
         ( long "port"
@@ -148,69 +148,69 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> metavar "port"
        <> value 3000
        <> showDefault
-       <> help "port number")
+       <> help "Specify the port number")
 
     ssl = many $ option (eitherReader parseSSL)
         ( long "tls"
        <> short 's'
        <> metavar "hostname:cerfile:keyfile"
-       <> help "enable TLS and specify a domain and associated TLS certificate (can be specified multiple times for multiple domains)")
+       <> help "Enable TLS and specify a domain with its associated TLS certificate (can be specified multiple times for multiple domains)")
 
     auth = optional $ strOption
         ( long "auth"
        <> short 'a'
        <> metavar "userpass.txt"
-       <> help "password file for proxy authentication (plain text file with lines each containing a colon separated user/password pair)")
+       <> help "Specify the password file for proxy authentication. Plaintext passwords should be in the format 'user:pass' and will be automatically Argon2-hashed by hprox. Ensure that the password file with plaintext password is writable")
 
     ws = optional $ strOption
         ( long "ws"
        <> metavar "remote-host:port"
-       <> help "remote host to handle websocket requests (port 443 indicates HTTPS remote server)")
+       <> help "Specify the remote host to handle WebSocket requests (port 443 indicates an HTTPS remote server)")
 
     rev = many $ option (maybeReader parseRev)
         ( long "rev"
        <> metavar "[//domain/][/prefix/]remote-host:port"
-       <> help "remote host for reverse proxy (port 443 indicates HTTPS remote server), optional '//domain/' will only process requests with 'Host: domain' header, optional '/prefix/' can be specified as prefix to be matched (and stripped in proxied request)")
+       <> help "Specify the remote host for reverse proxy (port 443 indicates an HTTPS remote server). An optional '//domain/' will only process requests with the 'Host: domain' header, and an optional '/prefix/' can be specified as a prefix to be matched (and stripped in proxied request)")
 
     doh = optional $ strOption
         ( long "doh"
        <> metavar "dns-server:port"
-       <> help "enable DNS-over-HTTPS(DoH) support (53 will be used if port is not specified)")
+       <> help "Enable DNS-over-HTTPS (DoH) support (port 53 will be used if not specified)")
 
     hide = switch
         ( long "hide"
-       <> help "never send 'proxy authentication required' response (however this might break the use of HTTPS proxy in browser)")
+       <> help "Never send 'Proxy Authentication Required' response. Note that this might break the use of HTTPS proxy in browsers")
 
     naive = switch
         ( long "naive"
-       <> help "add naiveproxy compatible padding (requires TLS)")
+       <> help "Add naiveproxy-compatible padding (requires TLS)")
 
     name = strOption
         ( long "name"
        <> metavar "server-name"
        <> value "hprox"
        <> showDefault
-       <> help "specify the server name for the 'Server' header")
+       <> help "Specify the server name for the 'Server' header")
 
     logging = strOption
         ( long "log"
        <> metavar "<none|stdout|stderr|file>"
        <> value "stdout"
        <> showDefault
-       <> help "specify the logging type")
+       <> help "Specify the logging type")
 
     loglevel = option (maybeReader logLevelReader)
         ( long "loglevel"
        <> metavar "<trace|debug|info|warn|error|none>"
        <> value INFO
-       <> help "specify the logging level (default: info)")
+       <> help "Specify the logging level (default: info)")
 
 #ifdef QUIC_ENABLED
     quic = optional $ option auto
         ( long "quic"
        <> short 'q'
        <> metavar "port"
-       <> help "enable QUIC (HTTP/3) on UDP port")
+       <> help "Enable QUIC (HTTP/3) on UDP port")
 #endif
 
 getLoggerType :: String -> LogType' LogStr
