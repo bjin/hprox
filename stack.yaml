@@ -1,4 +1,4 @@
-resolver: lts-21.21
+resolver: lts-21.24
 packages:
 - '.'
 extra-deps:
@@ -11,8 +11,8 @@ extra-deps:
 - crypto-token-0.0.2
 - http2-5.0.0
 - http3-0.0.7
-- network-udp-0.0.0
 - network-control-0.0.2
+- network-udp-0.0.0
 - quic-0.1.12
 - sockaddr-0.0.1
 - warp-quic-0.0.0
