@@ -1,3 +1,9 @@
+## 0.6.0
+
+- `--rev` now supports domain matching
+- fix `Content-Length` header in HTTP/2 responses.
+- passwords are now Argon2 salt-hashed
+
 ## 0.5.4
 
 - routable `--rev` reverse proxy support
