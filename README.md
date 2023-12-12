@@ -12,7 +12,7 @@
 ### Features
 
 * Basic HTTP proxy functionality.
-* Simple password authentication.
+* [Basic](https://en.wikipedia.org/wiki/Basic_access_authentication) password authentication.
 * Enables TLS encryption, requiring a valid certificate. Supports TLS 1.3 and HTTP/2, also known as SPDY Proxy.
 * TLS SNI validation (blocks all clients with an invalid domain name).
 * Provides a PAC file for seamless client-side configuration, compatible with browsers like Chrome and Firefox.
@@ -41,7 +41,7 @@ Alternatively, you have the option to utilize the statically linked binary avail
 
 Utilize `hprox --help` to view a comprehensive list of options along with detailed explanations.
 
-* To run `hprox` on port 8080 with simple password authentication:
+* To run `hprox` on port 8080 with simple password authentication (passwords will be [Argon2-hashed](https://en.wikipedia.org/wiki/Argon2) after first run):
 
 ```sh
 echo "user:pass" > userpass.txt
