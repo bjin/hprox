@@ -108,7 +108,7 @@ jobs:
       - checkout
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-win-{{ checksum "stack.yaml" }}
+          key: cci-hprox-windows-{{ checksum "stack.yaml" }}
       - run:
           name: Prepare environment
           command: |
@@ -116,20 +116,20 @@ jobs:
             curl -o ./stack.zip -L "$STACK_BIN_URL"
             7z x stack.zip stack.exe
             rm -f stack.zip
-            ./stack.exe --skip-msys \
+            ./stack.exe --skip-msys --ghc-variant int-native \
                 setup
       - run:
           name: Workaround for OOM (build http-reverse-proxy first)
           command: |
-            ./stack.exe --skip-msys \
+            ./stack.exe --skip-msys --ghc-variant int-native \
                 --no-terminal --no-interleaved-output \
-                build http-reverse-proxy --flag hprox:quic $GHC_OPTIONS
+                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
-            ./stack.exe --skip-msys \
+            ./stack.exe --skip-msys --ghc-variant int-native \
                 --no-terminal --no-interleaved-output \
-                install --flag hprox:quic $GHC_OPTIONS
+                install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
           command: |
