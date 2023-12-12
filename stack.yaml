@@ -6,16 +6,16 @@ extra-deps:
   commit: warp-3.3.31-patched
   subdirs:
   - warp
-- github: bjin/http-reverse-proxy
-  commit: ffa76f78d325723726559bf0047f056602a577fd
 - crypto-token-0.0.2
-- http2-5.0.0
 - http3-0.0.7
 - network-control-0.0.2
 - network-udp-0.0.0
-- quic-0.1.12
+- quic-0.1.13
 - sockaddr-0.0.1
 - warp-quic-0.0.0
+# latest release not yet in LTS
+- http-reverse-proxy-0.6.0.2
+- http2-5.0.0
 # crypton packages
 - crypton-0.34
 - crypton-connection-0.3.1

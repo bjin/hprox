@@ -30,7 +30,7 @@ dependencies:
 - fast-logger >= 3.0
 - http-client >= 0.5
 - http-client-tls >= 0.3.4
-- http-reverse-proxy >= 0.4.0
+- http-reverse-proxy >= 0.6.0.2
 - http-types >= 0.12
 - http2 >= 4.0
 - optparse-applicative >= 0.14
