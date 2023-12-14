@@ -141,7 +141,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-win-{{ checksum "stack.yaml" }}
+          key: cci-hprox-windows-{{ checksum "stack.yaml" }}
           paths:
             - ~/AppData/Roaming/stack
 workflows:
