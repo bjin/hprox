@@ -1,4 +1,4 @@
-resolver: lts-21.24
+resolver: lts-22.0
 packages:
 - '.'
 extra-deps:
@@ -6,27 +6,13 @@ extra-deps:
   commit: warp-3.3.31-patched
   subdirs:
   - warp
-- crypto-token-0.0.2
+- crypto-token-0.1.0
 - http3-0.0.7
-- network-control-0.0.2
 - network-udp-0.0.0
-- quic-0.1.13
+- quic-0.1.14
 - sockaddr-0.0.1
-- warp-quic-0.0.0
-# latest release not yet in LTS
-- http-reverse-proxy-0.6.0.2
-- http2-5.0.0
-# crypton packages
-- crypton-0.34
-- crypton-connection-0.3.1
-- crypton-x509-1.7.6
-- crypton-x509-store-1.6.9
-- crypton-x509-system-1.6.7
-- crypton-x509-validation-1.6.12
-- dns-4.2.0
-- http-client-tls-0.3.6.3
 - tls-1.9.0
-- warp-tls-3.4.3
+- warp-quic-0.0.0
 drop-packages:
 - cryptonite
 flags:
