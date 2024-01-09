@@ -73,11 +73,6 @@ hprox -p 443 -q 8443 -s example.com:fullchain.pem:privkey.pem -a userpass.txt --
 
 Then DoH can be accessed at `https://example.com/dns-query`.
 
-### Known Issue
-
-* At present, HTTP/3 functions exclusively on the first domain as specified by `-s/--tls`,
-  and SNI validation is currently unavailable.
-
 ### License
 
 `hprox` is licensed under the Apache license. Refer to the `LICENSE` file for comprehensive details.

@@ -19,7 +19,10 @@ module Network.HProx
   ) where
 
 import Data.ByteString.Char8       qualified as BS8
+import Data.Default.Class          (def)
 import Data.HashMap.Strict         qualified as HM
+import Data.List
+    (elemIndex, elemIndices, find, isSuffixOf, sortOn, (\\))
 import Data.Ord                    (Down (..))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
@@ -34,8 +37,9 @@ import Network.Wai.Handler.Warp
     runSettings, setHost, setLogger, setNoParsePath, setOnException, setPort,
     setServerName)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure (..), WarpTLSException, onInsecure, runTLS, tlsAllowedVersions,
-    tlsCiphers, tlsServerHooks, tlsSessionManager, tlsSettings)
+    (OnInsecure (..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS,
+    tlsAllowedVersions, tlsCiphers, tlsCredentials, tlsServerHooks,
+    tlsSessionManager)
 
 import Control.Exception    (Exception (..))
 import GHC.IO.Exception     (IOErrorType (..))
@@ -51,7 +55,6 @@ import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
 import Control.Monad
-import Data.List
 import Data.Maybe
 import Options.Applicative
 
@@ -237,13 +240,11 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
     smgr <- SM.newSessionManager SM.defaultConfig
 
     let isSSL = not (null certfiles)
-        (primaryHost, primaryCert) = head certfiles
-        otherCerts = tail $ zip (map fst certfiles) certs
+        allCerts = zip (map fst certfiles) certs
 
     when isSSL $ do
         logger INFO $ "read " <> toLogStr (show $ length certs) <> " certificates"
-        logger INFO $ "primary domain: " <> toLogStr primaryHost
-        logger INFO $ "other domains: " <> toLogStr (unwords $ map fst otherCerts)
+        logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
 
     let settings = setHost (fromString (fromMaybe "*6" _bind)) $
                    setPort _port $
@@ -273,9 +274,6 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             | otherwise                           =
                 logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
-        tlsset' = tlsSettings (certfile primaryCert) (keyfile primaryCert)
-        hooks = (tlsServerHooks tlsset') { TLS.onServerNameIndication = onSNI }
-
         -- https://www.ssllabs.com/ssltest
         weak_ciphers = [ TLS.cipher_ECDHE_RSA_AES256CBC_SHA384
                        , TLS.cipher_ECDHE_RSA_AES256CBC_SHA
@@ -285,18 +283,17 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                        , TLS.cipher_AES256_SHA1
                        ]
 
-        tlsset = tlsset'
-            { tlsServerHooks     = hooks
+        tlsset = defaultTlsSettings
+            { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
+            , tlsCredentials     = Just (TLS.Credentials certs)
             , onInsecure         = AllowInsecure
             , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
             , tlsCiphers         = TLS.ciphersuite_strong \\ weak_ciphers
             , tlsSessionManager  = Just smgr
             }
 
-        onSNI Nothing = fail "SNI: unspecified"
-        onSNI (Just host)
-          | checkSNI host primaryHost = return mempty
-          | otherwise                 = lookupSNI host otherCerts
+        onSNI Nothing     = fail "SNI: unspecified"
+        onSNI (Just host) = lookupSNI host allCerts
 
         lookupSNI host [] = fail ("SNI: unknown hostname (" ++ show host ++ ")")
         lookupSNI host ((p, cert) : cs)
@@ -314,9 +311,10 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         quicset qport = Q.defaultServerConfig
             { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
             , Q.scVersions       = [Q.Version1, Q.Version2]
-            , Q.scCredentials    = TLS.Credentials [head certs]
+            , Q.scCredentials    = TLS.Credentials certs
             , Q.scCiphers        = Q.scCiphers Q.defaultServerConfig \\ weak_ciphers
             , Q.scALPN           = Just alpn
+            , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
             , Q.scUse0RTT        = True
             , Q.scSessionManager = smgr
             }
