@@ -1,7 +1,13 @@
+## 0.6.1
+
+- multiple certificates and SNI support for HTTP/3
+- install signal handler with graceful shutdown on Linux and macOS
+- support ACME `http-01` challenge (RFC8555)
+
 ## 0.6.0
 
 - `--rev` now supports domain matching
-- fix `Content-Length` header in HTTP/2 responses.
+- fix `Content-Length` header in HTTP/2 responses
 - passwords are now Argon2 salt-hashed
 
 ## 0.5.4
