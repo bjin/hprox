@@ -21,6 +21,7 @@
 * DNS-over-HTTPS (DoH) support.
 * [naiveproxy](https://github.com/klzgrad/naiveproxy) compatible [padding](https://github.com/klzgrad/naiveproxy/#padding-protocol-an-informal-specification) (HTTP Connect proxy).
 * HTTP/3 (QUIC) support (`h3` protocol).
+* ACME `http-01` challenge as specified by RFC8555, see [acme.sh stateless mode](https://github.com/acmesh-official/acme.sh/wiki/Stateless-Mode).
 * Designed as a middleware, ensuring compatibility with any Haskell Web Application built using the `wai` interface.
   Refer to [library documents](https://hackage.haskell.org/package/hprox) for details.
 

@@ -76,12 +76,13 @@ data Config = Config
   , _port     :: Int
   , _ssl      :: [(String, CertFile)]
   , _auth     :: Maybe FilePath
-  , _ws       :: Maybe String
+  , _ws       :: Maybe BS8.ByteString
   , _rev      :: [(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
   , _doh      :: Maybe String
   , _hide     :: Bool
   , _naive    :: Bool
   , _name     :: BS8.ByteString
+  , _acme     :: Maybe BS8.ByteString
   , _log      :: String
   , _loglevel :: LogLevel
 #ifdef QUIC_ENABLED
@@ -91,7 +92,7 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing [] Nothing False False "hprox" "stdout" INFO
+defaultConfig = Config Nothing 3000 [] Nothing Nothing [] Nothing False False "hprox" Nothing "stdout" INFO
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -139,6 +140,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> hide
                     <*> naive
                     <*> name
+                    <*> acme
                     <*> logging
                     <*> loglevel
 #ifdef QUIC_ENABLED
@@ -200,6 +202,11 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> value "hprox"
        <> showDefault
        <> help "Specify the server name for the 'Server' header")
+
+    acme = optional $ strOption
+        ( long "acme"
+       <> metavar "ACCOUNT_THUMBPRINT"
+       <> help "Set the thumbprint for stateless http-01 ACME challenge as specified by RFC8555")
 
     logging = strOption
         ( long "log"
@@ -377,8 +384,9 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
     manager <- newTlsManager
 
     let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
-        pset = ProxySettings pauth (Just _name) (BS8.pack <$> _ws) revSorted _hide (_naive && isSSL) logger
+        pset = ProxySettings pauth (Just _name) _ws revSorted _hide (_naive && isSSL) _acme logger
         proxy = healthCheckProvider $
+                acmeProvider pset $
                 (if isSSL then forceSSL pset else id) $
                 httpProxy pset manager $
                 reverseProxy pset manager fallback

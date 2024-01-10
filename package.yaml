@@ -36,6 +36,7 @@ dependencies:
 - http2 >= 4.0
 - optparse-applicative >= 0.14
 - random >= 1.2.1
+- text
 - tls >= 1.5
 - tls-session-manager >= 0.0.4
 - unordered-containers

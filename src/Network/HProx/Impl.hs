@@ -4,6 +4,7 @@
 
 module Network.HProx.Impl
   ( ProxySettings (..)
+  , acmeProvider
   , forceSSL
   , healthCheckProvider
   , httpConnectProxy
@@ -27,6 +28,7 @@ import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive       qualified as CI
 import Data.Conduit.Network       qualified as CN
+import Data.Text.Encoding         qualified as TE
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
     (ProxyDest (..), SetIpHeader (..), WaiProxyResponse (..),
@@ -46,13 +48,14 @@ import Network.HProx.Naive
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
-  { proxyAuth     :: Maybe (BS.ByteString -> Bool)
-  , passPrompt    :: Maybe BS.ByteString
-  , wsRemote      :: Maybe BS.ByteString
-  , revRemoteMap  :: [(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
-  , hideProxyAuth :: Bool
-  , naivePadding  :: Bool
-  , logger        :: Logger
+  { proxyAuth      :: Maybe (BS.ByteString -> Bool)
+  , passPrompt     :: Maybe BS.ByteString
+  , wsRemote       :: Maybe BS.ByteString
+  , revRemoteMap   :: [(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
+  , hideProxyAuth  :: Bool
+  , naivePadding   :: Bool
+  , acmeThumbprint :: Maybe BS.ByteString
+  , logger         :: Logger
   }
 
 logRequest :: Request -> LogStr
@@ -122,6 +125,18 @@ proxyAuthRequiredResponse ProxySettings{..} = responseKnownLength
     ""
   where
     prompt = fromMaybe "hprox" passPrompt
+
+acmeProvider :: ProxySettings -> Middleware
+acmeProvider ProxySettings{..} app req respond
+    | not (isSecure req)
+    , Just thumbprint <- acmeThumbprint
+    , [".well-known", "acme-challenge", token] <- pathInfo req
+        = respond $ responseKnownLength
+              HT.status200
+              [("Content-Type", "text/plain")] $
+              LBS.fromChunks [TE.encodeUtf8 token, ".", thumbprint]
+    | otherwise
+        = app req respond
 
 pacProvider :: Middleware
 pacProvider fallback req respond
