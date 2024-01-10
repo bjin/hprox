@@ -54,6 +54,12 @@ import Network.Wai.Handler.Warp     (setAltSvc)
 import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
+#ifdef OS_UNIX
+import Network.Wai.Handler.Warp
+    (setGracefulShutdownTimeout, setInstallShutdownHandler)
+import System.Posix.Signals
+#endif
+
 import Control.Monad
 import Data.Maybe
 import Options.Applicative
@@ -250,8 +256,18 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                    setPort _port $
                    setLogger warpLogger $
                    setOnException exceptionHandler $
+#ifdef OS_UNIX
+                   setGracefulShutdownTimeout (Just 3) $
+                   setInstallShutdownHandler shutdownHandler $
+#endif
                    setNoParsePath True $
                    setServerName _name defaultSettings
+
+#ifdef OS_UNIX
+        shutdownHandler closeSocket = do
+            void $ installHandler sigTERM (CatchOnce $ logger INFO "Received SIGTERM signal, shutting down gracefully" >> closeSocket) Nothing
+            void $ installHandler sigINT (CatchOnce $ logger INFO "Received SIGINT signal, shutting down gracefully" >> closeSocket) Nothing
+#endif
 
         exceptionHandler req ex
             | _loglevel > DEBUG                                 = return ()

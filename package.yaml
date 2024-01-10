@@ -77,6 +77,10 @@ when:
   - http3 >= 0.0.3
   - quic >= 0.1.15
   - warp-quic
+- condition: '!os(windows)'
+  cpp-options: -DOS_UNIX
+  dependencies:
+  - unix
 
 library:
   source-dirs: src
