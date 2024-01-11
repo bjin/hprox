@@ -298,17 +298,20 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                 logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
         -- https://www.ssllabs.com/ssltest
+        -- https://github.com/haskell-tls/hs-tls/blob/master/core/Network/TLS/Extra/Cipher.hs
         weak_ciphers = [ TLS.cipher_ECDHE_RSA_AES256CBC_SHA384
                        , TLS.cipher_ECDHE_RSA_AES256CBC_SHA
                        , TLS.cipher_AES256CCM_SHA256
                        , TLS.cipher_AES256GCM_SHA384
                        , TLS.cipher_AES256_SHA256
                        , TLS.cipher_AES256_SHA1
+                       , TLS.cipher_ECDHE_ECDSA_AES256CBC_SHA384
+                       , TLS.cipher_ECDHE_ECDSA_AES256CBC_SHA
                        ]
 
         tlsset = defaultTlsSettings
             { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
-            , tlsCredentials     = Just (TLS.Credentials certs)
+            , tlsCredentials     = Just (TLS.Credentials [head certs])
             , onInsecure         = AllowInsecure
             , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
             , tlsCiphers         = TLS.ciphersuite_strong \\ weak_ciphers
@@ -334,7 +337,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         quicset qport = Q.defaultServerConfig
             { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
             , Q.scVersions       = [Q.Version1, Q.Version2]
-            , Q.scCredentials    = TLS.Credentials certs
+            , Q.scCredentials    = TLS.Credentials [head certs]
             , Q.scCiphers        = Q.scCiphers Q.defaultServerConfig \\ weak_ciphers
             , Q.scALPN           = Just alpn
             , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
