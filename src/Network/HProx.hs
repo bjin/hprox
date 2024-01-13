@@ -293,7 +293,7 @@ dropRootPriviledge logger user group = do
             getUserEntryForName user' >>= setUserID . userID
             changedUser <- getRealUserID
             when (changedUser == currentUser) $ abort "failed to setuid, aborting"
-        logger DEBUG "trying to setuid(0)"
+        logger DEBUG "testing setuid(0), verify that root priviledge can't be regranted"
         catch (setUserID 0) $ \(_ :: SomeException) -> logger DEBUG "setuid(0) failed as expected"
         changedUser <- getRealUserID
         when (changedUser == 0) $ abort "unable to drop root priviledge, aborting"
@@ -358,7 +358,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             dropped <- dropRootPriviledge logger _user _group
 #if defined(DROP_ALL_CAPS_EXCEPT_BIND)
             when dropped $ do
-                logger INFO "trying to drop all capabilities except CAP_NET_BIND_SERVICE"
+                logger INFO "drop all capabilities except CAP_NET_BIND_SERVICE"
                 dropAllCapsExceptBind
 #elif defined(QUIC_ENABLED)
             case (dropped, _quic) of
