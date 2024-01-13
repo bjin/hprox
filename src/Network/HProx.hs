@@ -55,9 +55,17 @@ import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
 #ifdef OS_UNIX
+import Control.Exception        (SomeException, catch)
 import Network.Wai.Handler.Warp
-    (setGracefulShutdownTimeout, setInstallShutdownHandler)
+    (setBeforeMainLoop, setGracefulShutdownTimeout, setInstallShutdownHandler)
+import System.Exit
+import System.Posix.Process
 import System.Posix.Signals
+import System.Posix.User
+#ifdef DROP_ALL_CAPS_EXCEPT_BIND
+import Foreign.C.Types  (CInt (..))
+import System.Directory (listDirectory)
+#endif
 #endif
 
 import Control.Monad
@@ -85,6 +93,10 @@ data Config = Config
   , _acme     :: Maybe BS8.ByteString
   , _log      :: String
   , _loglevel :: LogLevel
+#ifdef OS_UNIX
+  , _user     :: Maybe String
+  , _group    :: Maybe String
+#endif
 #ifdef QUIC_ENABLED
   , _quic     :: Maybe Int
 #endif
@@ -93,6 +105,10 @@ data Config = Config
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
 defaultConfig = Config Nothing 3000 [] Nothing Nothing [] Nothing False False "hprox" Nothing "stdout" INFO
+#ifdef OS_UNIX
+  Nothing
+  Nothing
+#endif
 #ifdef QUIC_ENABLED
     Nothing
 #endif
@@ -143,6 +159,10 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
                     <*> acme
                     <*> logging
                     <*> loglevel
+#ifdef OS_UNIX
+                    <*> user
+                    <*> group
+#endif
 #ifdef QUIC_ENABLED
                     <*> quic
 #endif
@@ -221,6 +241,20 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> value INFO
        <> help "Specify the logging level (default: info)")
 
+#ifdef OS_UNIX
+    user = optional $ strOption
+        ( long "user"
+       <> short 'u'
+       <> metavar "nobody"
+       <> help "Drop root priviledge and setuid to the specified user (like nobody)")
+
+    group = optional $ strOption
+        ( long "group"
+       <> short 'g'
+       <> metavar "nogroup"
+       <> help "Drop root priviledge and setgid to the specified group")
+#endif
+
 #ifdef QUIC_ENABLED
     quic = optional $ option auto
         ( long "quic"
@@ -234,6 +268,50 @@ getLoggerType "none"   = LogNone
 getLoggerType "stdout" = LogStdout 4096
 getLoggerType "stderr" = LogStderr 4096
 getLoggerType file     = LogFileNoRotate file 4096
+
+#ifdef OS_UNIX
+dropRootPriviledge :: Logger -> Maybe String -> Maybe String -> IO Bool
+dropRootPriviledge _ Nothing Nothing = return False
+dropRootPriviledge logger user group = do
+    currentUser <- getRealUserID
+    currentGroup <- getRealGroupID
+    if currentUser /= 0 || currentGroup /= 0
+      then do
+        logger WARN $ "Unable to setuid/setgid without root priviledge" <>
+                      ", userID=" <> toLogStr (show currentUser) <>
+                      ", groupID=" <> toLogStr (show currentGroup)
+        return False
+      else do
+        let abort msg = logger ERROR msg >> exitImmediately (ExitFailure 1)
+        forM_ group $ \group' -> do
+            logger INFO $ "setgid to " <> toLogStr group'
+            getGroupEntryForName group' >>= setGroupID . groupID
+            changedGroup <- getRealGroupID
+            when (changedGroup == currentGroup) $ abort "failed to setgid, aborting"
+        forM_ user $ \user' -> do
+            logger INFO $ "setuid to " <> toLogStr user'
+            getUserEntryForName user' >>= setUserID . userID
+            changedUser <- getRealUserID
+            when (changedUser == currentUser) $ abort "failed to setuid, aborting"
+        logger DEBUG "trying to setuid(0)"
+        catch (setUserID 0) $ \(_ :: SomeException) -> logger DEBUG "setuid(0) failed as expected"
+        changedUser <- getRealUserID
+        when (changedUser == 0) $ abort "unable to drop root priviledge, aborting"
+        return True
+
+#ifdef DROP_ALL_CAPS_EXCEPT_BIND
+foreign import ccall unsafe "send_signal"
+  c_send_signal :: CInt -> CInt -> IO ()
+
+-- Taken from mighttpd2, see https://kazu-yamamoto.hatenablog.jp/entry/2020/12/10/150731 for details
+dropAllCapsExceptBind :: IO ()
+dropAllCapsExceptBind = do
+    pid <- getProcessID
+    strtids <- listDirectory ("/proc/" ++ show pid ++ "/task")
+    let tids = map read strtids :: [Int]
+    forM_ tids $ \tid -> c_send_signal (fromIntegral tid) sigUSR1
+#endif
+#endif
 
 -- | Read 'Config' from command line arguments
 getConfig :: IO Config
@@ -266,6 +344,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
 #ifdef OS_UNIX
                    setGracefulShutdownTimeout (Just 3) $
                    setInstallShutdownHandler shutdownHandler $
+                   setBeforeMainLoop doBeforeMainLoop $
 #endif
                    setNoParsePath True $
                    setServerName _name defaultSettings
@@ -274,6 +353,20 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         shutdownHandler closeSocket = do
             void $ installHandler sigTERM (CatchOnce $ logger INFO "Received SIGTERM signal, shutting down gracefully" >> closeSocket) Nothing
             void $ installHandler sigINT (CatchOnce $ logger INFO "Received SIGINT signal, shutting down gracefully" >> closeSocket) Nothing
+
+        doBeforeMainLoop = do
+            dropped <- dropRootPriviledge logger _user _group
+#if defined(DROP_ALL_CAPS_EXCEPT_BIND)
+            when dropped $ do
+                logger INFO "trying to drop all capabilities except CAP_NET_BIND_SERVICE"
+                dropAllCapsExceptBind
+#elif defined(QUIC_ENABLED)
+            case (dropped, _quic) of
+                (True, Just qport) | qport < 1024 -> logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
+                _ -> return ()
+#else
+            return ()
+#endif
 #endif
 
         exceptionHandler req ex

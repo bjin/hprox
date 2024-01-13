@@ -27,6 +27,7 @@ dependencies:
 - conduit-extra >= 1.3
 - crypton
 - data-default-class
+- directory
 - dns >= 4.0
 - fast-logger >= 3.0
 - http-client >= 0.5
@@ -78,6 +79,10 @@ when:
   - http3 >= 0.0.3
   - quic >= 0.1.15
   - warp-quic
+  when:
+  - condition: os(linux)
+    cpp-options: -DDROP_ALL_CAPS_EXCEPT_BIND
+    c-sources: cbits/setcap.c
 - condition: '!os(windows)'
   cpp-options: -DOS_UNIX
   dependencies:
