@@ -16,36 +16,6 @@ extra-source-files:
 - README.md
 - Changelog.md
 
-dependencies:
-- async >= 2.2
-- base >= 4.12 && < 5
-- base64-bytestring >= 1.1
-- binary >= 0.8
-- bytestring >= 0.10
-- case-insensitive >= 1.2
-- conduit >= 1.3
-- conduit-extra >= 1.3
-- crypton
-- data-default-class
-- directory
-- dns >= 4.0
-- fast-logger >= 3.0
-- http-client >= 0.5
-- http-client-tls >= 0.3.4
-- http-reverse-proxy >= 0.6.0.2
-- http-types >= 0.12
-- http2 >= 4.0
-- optparse-applicative >= 0.14
-- random >= 1.2.1
-- text
-- tls >= 1.5
-- tls-session-manager >= 0.0.4
-- unordered-containers
-- wai >= 3.2.2
-- wai-extra >= 3.0
-- warp >= 3.2.8
-- warp-tls >= 3.2.12
-
 flags:
   static:
     description: Enable static build
@@ -72,30 +42,58 @@ ghc-options:
 - -Wpartial-fields
 - -Wredundant-constraints
 
-when:
-- condition: flag(quic)
-  cpp-options: -DQUIC_ENABLED
-  dependencies:
-  - http3 >= 0.0.3
-  - quic >= 0.1.15
-  - warp-quic
-  when:
-  - condition: os(linux)
-    cpp-options: -DDROP_ALL_CAPS_EXCEPT_BIND
-    c-sources: cbits/setcap.c
-- condition: '!os(windows)'
-  cpp-options: -DOS_UNIX
-  dependencies:
-  - unix
-
 library:
   source-dirs: src
   exposed-modules:
-    - Network.HProx
+  - Network.HProx
+  dependencies:
+  - async >= 2.2
+  - base >= 4.12 && < 5
+  - base64-bytestring >= 1.1
+  - binary >= 0.8
+  - bytestring >= 0.10
+  - case-insensitive >= 1.2
+  - conduit >= 1.3
+  - conduit-extra >= 1.3
+  - crypton
+  - data-default-class
+  - directory
+  - dns >= 4.0
+  - fast-logger >= 3.0
+  - http-client >= 0.5
+  - http-client-tls >= 0.3.4
+  - http-reverse-proxy >= 0.6.0.2
+  - http-types >= 0.12
+  - http2 >= 4.0
+  - optparse-applicative >= 0.14
+  - random >= 1.2.1
+  - text
+  - tls >= 1.5
+  - tls-session-manager >= 0.0.4
+  - unordered-containers
+  - wai >= 3.2.2
+  - wai-extra >= 3.0
+  - warp >= 3.2.8
+  - warp-tls >= 3.2.12
+  when:
+  - condition: flag(quic)
+    cpp-options: -DQUIC_ENABLED
+    dependencies:
+    - http3 >= 0.0.3
+    - quic >= 0.1.15
+    - warp-quic
+    when:
+    - condition: os(linux)
+      cpp-options: -DDROP_ALL_CAPS_EXCEPT_BIND
+      c-sources: cbits/setcap.c
+  - condition: '!os(windows)'
+    cpp-options: -DOS_UNIX
+    dependencies:
+    - unix
 
 executables:
   hprox:
-    main:                Main.hs
+    main: Main.hs
     source-dirs:
     - app
     ghc-options:
@@ -106,4 +104,8 @@ executables:
     - condition: flag(static)
       ghc-options: -optl-static
     dependencies:
+    - base
+    - bytestring
     - hprox
+    - http-types
+    - wai
