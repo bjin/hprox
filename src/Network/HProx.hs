@@ -56,16 +56,15 @@ import Network.Wai.Handler.WarpQUIC (runQUIC)
 
 #ifdef OS_UNIX
 import Control.Exception        (SomeException, catch)
-import Network.Wai.Handler.Warp
-    (setBeforeMainLoop, setGracefulShutdownTimeout, setInstallShutdownHandler)
+import Network.Wai.Handler.Warp (setBeforeMainLoop)
 import System.Exit
-import System.Posix.Process
-import System.Posix.Signals
+import System.Posix.Process     (exitImmediately)
 import System.Posix.User
 
 #ifdef DROP_ALL_CAPS_EXCEPT_BIND
-import Foreign.C.Types  (CInt (..))
-import System.Directory (listDirectory)
+import Foreign.C.Types      (CInt (..))
+import System.Directory     (listDirectory)
+import System.Posix.Signals (sigUSR1)
 #endif
 #endif
 
@@ -342,18 +341,12 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                    setLogger warpLogger $
                    setOnException exceptionHandler $
 #ifdef OS_UNIX
-                   setGracefulShutdownTimeout (Just 3) $
-                   setInstallShutdownHandler shutdownHandler $
                    setBeforeMainLoop doBeforeMainLoop $
 #endif
                    setNoParsePath True $
                    setServerName _name defaultSettings
 
 #ifdef OS_UNIX
-        shutdownHandler closeSocket = do
-            void $ installHandler sigTERM (CatchOnce $ logger INFO "Received SIGTERM signal, shutting down gracefully" >> closeSocket) Nothing
-            void $ installHandler sigINT (CatchOnce $ logger INFO "Received SIGINT signal, shutting down gracefully" >> closeSocket) Nothing
-
         doBeforeMainLoop = do
             dropped <- dropRootPriviledge logger _user _group
 #if defined(DROP_ALL_CAPS_EXCEPT_BIND)
