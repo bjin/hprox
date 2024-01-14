@@ -2,6 +2,7 @@
 --
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
+{-# LANGUAGE ViewPatterns #-}
 module Network.HProx.Impl
   ( ProxySettings(..)
   , acmeProvider
@@ -113,6 +114,11 @@ checkAuth ProxySettings{..} req
 
     authorized = fromJust proxyAuth decodedRsp
     authMsg = if authorized then "authorized" else "unauthorized"
+
+parseConnectProxy :: Request -> Maybe (BS.ByteString, Int)
+parseConnectProxy req
+    | requestMethod req == "CONNECT" = parseHostPort (rawPathInfo req) <|> (requestHeaderHost req >>= parseHostPort)
+    | otherwise                      = Nothing
 
 redirectWebsocket :: ProxySettings -> Request -> Bool
 redirectWebsocket ProxySettings{..} req = wpsUpgradeToRaw defaultWaiProxySettings req && isJust wsRemote
@@ -244,8 +250,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
                 BS.drop (BS.length rawPathPrefix) rawPath
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset@ProxySettings{..} fallback req respond
-    | not isConnectProxy = fallback req respond
+httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond
     | checkAuth pset req = do
         when (isJust mPaddingType) $ logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show (fromJust mPaddingType)) <> " for " <> logRequest req
         respondResponse
@@ -256,10 +261,6 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
         logger WARN $ "unauthorized request: " <> logRequest req
         respond (proxyAuthRequiredResponse pset)
   where
-    hostPort' = parseHostPort (rawPathInfo req) <|> (requestHeaderHost req >>= parseHostPort)
-    isConnectProxy = requestMethod req == "CONNECT" && isJust hostPort'
-
-    Just (host, port) = hostPort'
     settings = CN.clientSettings port host
 
     backup = responseKnownLength HT.status500 [("Content-Type", "text/plain")]
@@ -274,8 +275,8 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
             withAsync right $ \r -> do
                 res1 <- waitEither l r
                 let unfinished = case res1 of
-                        Left _ -> r
-                        _      -> l
+                        Left _  -> r
+                        Right _ -> l
                 res2 <- timeout (secs * 1000000) (wait unfinished)
                 when (isNothing res2) $ cancel unfinished
 
@@ -318,3 +319,4 @@ httpConnectProxy pset@ProxySettings{..} fallback req respond
             void $ runStreams 5
                 (runConduit clientToServer)
                 (runConduit serverToClient)
+httpConnectProxy _ fallback req respond = fallback req respond

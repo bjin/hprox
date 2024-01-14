@@ -22,6 +22,7 @@ import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.HashMap.Strict         qualified as HM
 import Data.List                   (elemIndex, elemIndices, find, isSuffixOf, sortOn, (\\))
+import Data.List.NonEmpty          (NonEmpty(..))
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
@@ -123,8 +124,8 @@ parser :: ParserInfo Config
 parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
   where
     parseSSL s = case splitBy ':' s of
-        [host, cert, key] -> Right (host, CertFile cert key)
-        _                 -> Left "invalid format for ssl certificates"
+        host :| [cert, key] -> Right (host, CertFile cert key)
+        _                   -> Left "invalid format for ssl certificates"
 
     parseRev0 s@('/':_) = case elemIndices '/' s of
         []      -> Nothing

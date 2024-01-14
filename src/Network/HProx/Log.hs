@@ -33,7 +33,7 @@ logLevelReader "info"  = Just INFO
 logLevelReader "warn"  = Just WARN
 logLevelReader "error" = Just ERROR
 logLevelReader "none"  = Just NONE
-loglevelReader _       = Nothing
+logLevelReader _       = Nothing
 
 logWith :: TimedFastLogger -> LogLevel -> LogStr -> IO ()
 logWith logger level logstr = logger (\time -> toLogStr time <> " [" <> toLogStr (show level) <> "] " <> logstr <> "\n")

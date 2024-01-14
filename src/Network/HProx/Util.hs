@@ -18,6 +18,8 @@ module Network.HProx.Util
 import Data.ByteString       qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy  qualified as LBS
+import Data.List.NonEmpty    (NonEmpty(..), (<|))
+import Data.List.NonEmpty    qualified as NE
 import Data.Maybe            (fromMaybe)
 
 import Network.HTTP.Types (ResponseHeaders, Status)
@@ -35,11 +37,11 @@ data Password = PlainText BS.ByteString
 data PasswordSalted = PasswordSalted BS.ByteString BS.ByteString
     deriving (Show, Eq)
 
-splitBy :: Eq a => a -> [a] -> [[a]]
-splitBy _ [] = [[]]
+splitBy :: Eq a => a -> [a] -> NonEmpty [a]
+splitBy _ [] = NE.singleton []
 splitBy c (x:xs)
-  | c == x    = [] : splitBy c xs
-  | otherwise = let y:ys = splitBy c xs in (x:y):ys
+  | c == x    = [] <| splitBy c xs
+  | otherwise = let y :| ys = splitBy c xs in (x:y) :| ys
 
 passwordReader :: BS.ByteString -> Maybe (BS.ByteString, Password)
 passwordReader line = case BS8.split ':' line of
