@@ -5,34 +5,26 @@ jobs:
       image: ubuntu-2204:current
     resource_class: medium
     environment:
-      - STACK_VER: 2.13.1
       - DOCKER_REPO: bjin/stack-docker:9.6.3
-      - DOCKER_EXE: image
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
       - run:
           name: Prepare environment
           command: |
-            export STACK_BIN_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-linux-x86_64.tar.gz"
-            curl -L "$STACK_BIN_URL" | tar xz --wildcards --strip-components=1 '*/stack'
             docker pull "$DOCKER_REPO"
+            docker create --name stack-docker "$DOCKER_REPO"
+            docker cp stack-docker:/usr/local/bin/stack .
+            docker rm stack-docker
       - restore_cache:
           name: Restore Cached Dependencies
           key: cci-hprox-x86_64-{{ checksum "stack.yaml" }}
-      - run:
-          name: Workaround for OOM (build http-reverse-proxy first)
-          command: |
-            ./stack \
-                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
             ./stack \
                 --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
+                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe image \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
@@ -53,34 +45,26 @@ jobs:
       image: ubuntu-2204:current
     resource_class: arm.medium
     environment:
-      - STACK_VER: 2.13.1
       - DOCKER_REPO: bjin/stack-docker-aarch64:9.6.3
-      - DOCKER_EXE: image
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
       - run:
           name: Prepare environment
           command: |
-            export STACK_BIN_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-linux-aarch64.tar.gz"
-            curl -L "$STACK_BIN_URL" | tar xz --wildcards --strip-components=1 '*/stack'
             docker pull "$DOCKER_REPO"
+            docker create --name stack-docker "$DOCKER_REPO"
+            docker cp stack-docker:/usr/local/bin/stack .
+            docker rm stack-docker
       - restore_cache:
           name: Restore Cached Dependencies
           key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
-      - run:
-          name: Workaround for OOM (build http-reverse-proxy first)
-          command: |
-            ./stack \
-                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
-                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
             ./stack \
                 --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe "$DOCKER_EXE" \
+                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe image \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
@@ -118,12 +102,6 @@ jobs:
             rm -f stack.zip
             ./stack.exe --skip-msys --ghc-variant int-native \
                 setup
-      - run:
-          name: Workaround for OOM (build http-reverse-proxy first)
-          command: |
-            ./stack.exe --skip-msys --ghc-variant int-native \
-                --no-terminal --no-interleaved-output \
-                build http-reverse-proxy --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Build
           command: |
