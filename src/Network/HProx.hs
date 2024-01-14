@@ -62,6 +62,7 @@ import System.Exit
 import System.Posix.Process
 import System.Posix.Signals
 import System.Posix.User
+
 #ifdef DROP_ALL_CAPS_EXCEPT_BIND
 import Foreign.C.Types  (CInt (..))
 import System.Directory (listDirectory)
@@ -306,8 +307,7 @@ foreign import ccall unsafe "send_signal"
 -- Taken from mighttpd2, see https://kazu-yamamoto.hatenablog.jp/entry/2020/12/10/150731 for details
 dropAllCapsExceptBind :: IO ()
 dropAllCapsExceptBind = do
-    pid <- getProcessID
-    strtids <- listDirectory ("/proc/" ++ show pid ++ "/task")
+    strtids <- listDirectory ("/proc/self/task")
     let tids = map read strtids :: [Int]
     forM_ tids $ \tid -> c_send_signal (fromIntegral tid) sigUSR1
 #endif
