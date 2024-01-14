@@ -3,7 +3,7 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Naive
-  ( PaddingType (..)
+  ( PaddingType(..)
   , addPaddingConduit
   , parseRequestForPadding
   , prepareResponseForPadding
@@ -20,8 +20,7 @@ import Data.Conduit.Binary       qualified as CB
 import Data.Maybe                (mapMaybe)
 import Network.HTTP.Types.Header qualified as HT
 import System.Random             (uniformR)
-import System.Random.Stateful
-    (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
+import System.Random.Stateful    (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
 
 import Data.Conduit
 import Network.Wai

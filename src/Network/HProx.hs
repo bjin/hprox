@@ -10,9 +10,9 @@
 -}
 
 module Network.HProx
-  ( CertFile (..)
-  , Config (..)
-  , LogLevel (..)
+  ( CertFile(..)
+  , Config(..)
+  , LogLevel(..)
   , defaultConfig
   , getConfig
   , run
@@ -21,9 +21,8 @@ module Network.HProx
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.HashMap.Strict         qualified as HM
-import Data.List
-    (elemIndex, elemIndices, find, isSuffixOf, sortOn, (\\))
-import Data.Ord                    (Down (..))
+import Data.List                   (elemIndex, elemIndices, find, isSuffixOf, sortOn, (\\))
+import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
@@ -33,16 +32,14 @@ import Network.TLS.Extra.Cipher    qualified as TLS
 import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
-    (InvalidRequest (..), defaultSettings, defaultShouldDisplayException,
-    runSettings, setHost, setLogger, setNoParsePath, setOnException, setPort,
-    setServerName)
+    (InvalidRequest(..), defaultSettings, defaultShouldDisplayException, runSettings, setHost,
+    setLogger, setNoParsePath, setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure (..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS,
-    tlsAllowedVersions, tlsCiphers, tlsCredentials, tlsServerHooks,
-    tlsSessionManager)
+    (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
+    tlsCiphers, tlsCredentials, tlsServerHooks, tlsSessionManager)
 
-import Control.Exception    (Exception (..))
-import GHC.IO.Exception     (IOErrorType (..))
+import Control.Exception    (Exception(..))
+import GHC.IO.Exception     (IOErrorType(..))
 import Network.HTTP2.Client qualified as H2
 import System.IO.Error      (ioeGetErrorType)
 
@@ -62,7 +59,7 @@ import System.Posix.Process     (exitImmediately)
 import System.Posix.User
 
 #ifdef DROP_ALL_CAPS_EXCEPT_BIND
-import Foreign.C.Types      (CInt (..))
+import Foreign.C.Types      (CInt(..))
 import System.Directory     (listDirectory)
 import System.Posix.Signals (sigUSR1)
 #endif

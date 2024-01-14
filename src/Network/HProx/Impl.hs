@@ -3,7 +3,7 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Impl
-  ( ProxySettings (..)
+  ( ProxySettings(..)
   , acmeProvider
   , forceSSL
   , healthCheckProvider
@@ -31,9 +31,8 @@ import Data.Conduit.Network       qualified as CN
 import Data.Text.Encoding         qualified as TE
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
-    (ProxyDest (..), SetIpHeader (..), WaiProxyResponse (..),
-    defaultWaiProxySettings, waiProxyToSettings, wpsSetIpHeader,
-    wpsUpgradeToRaw)
+    (ProxyDest(..), SetIpHeader(..), WaiProxyResponse(..), defaultWaiProxySettings,
+    waiProxyToSettings, wpsSetIpHeader, wpsUpgradeToRaw)
 import Network.HTTP.Types         qualified as HT
 import Network.HTTP.Types.Header  qualified as HT
 import System.Timeout             (timeout)

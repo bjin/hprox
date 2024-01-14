@@ -3,11 +3,11 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Log
-  ( LogLevel (..)
+  ( LogLevel(..)
   , LogStr
-  , LogType' (..)
+  , LogType'(..)
   , Logger
-  , ToLogStr (..)
+  , ToLogStr(..)
   , logLevelReader
   , pureLogger
   , withLogger

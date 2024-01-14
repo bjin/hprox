@@ -3,8 +3,8 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Util
-  ( Password (..)
-  , PasswordSalted (..)
+  ( Password(..)
+  , PasswordSalted(..)
   , hashPasswordWithRandomSalt
   , parseHostPort
   , parseHostPortWithDefault
@@ -23,9 +23,9 @@ import Data.Maybe            (fromMaybe)
 import Network.HTTP.Types (ResponseHeaders, Status)
 import Network.Wai
 
-import Crypto.Error           (CryptoFailable (..))
+import Crypto.Error           (CryptoFailable(..))
 import Crypto.KDF.Argon2      qualified as Argon2
-import Crypto.Random          (MonadRandom (getRandomBytes))
+import Crypto.Random          (MonadRandom(getRandomBytes))
 import Data.ByteString.Base64 qualified as Base64
 
 data Password = PlainText BS.ByteString

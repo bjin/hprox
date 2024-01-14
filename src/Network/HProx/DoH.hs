@@ -11,7 +11,7 @@ import Data.ByteString.Base64.URL qualified as Base64
 import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
 import Network.DNS
-    (DNSHeader (..), DNSMessage (..), Question (..), ResolvConf (..), Resolver)
+    (DNSHeader(..), DNSMessage(..), Question(..), ResolvConf(..), Resolver)
 import Network.DNS                qualified as DNS
 import Network.HTTP.Types         qualified as HT
 
