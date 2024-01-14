@@ -15,7 +15,7 @@ task:
   build_script:
     - ./stack --no-terminal --no-interleaved-output install --flag hprox:quic --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
   package_and_clean_script:
-    - if [ -n "$CIRRUS_TAG" ]; then VER="$CIRRUS_TAG"; else VER="$(./stack query locals hprox version)-$(git rev-parse --short HEAD)"; fi
+    - if [ -n "$CIRRUS_TAG" ]; then VER="${CIRRUS_TAG#v}"; else VER="$(./stack query locals hprox version)-$(git rev-parse --short HEAD)"; fi
     - tar czvf "hprox-$VER-darwin-aarch64.tar.gz" -C ~/.local/bin hprox
     - rm -rf "$(./stack path --programs)"
   release_artifacts:
