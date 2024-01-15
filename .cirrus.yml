@@ -6,9 +6,9 @@ task:
     STACK_VER: 2.13.1
     STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-osx-aarch64.tar.gz
   stack_cache:
-    folder: ~/.stack/snapshots
+    folder: ~/.stack
     fingerprint_script:
-      - echo v2
+      - echo v3
       - grep -F resolver stack.yaml
   setup_script:
     - curl -L "${STACK_BIN_URL}" | tar xz --strip-components=1 "stack-${STACK_VER}-osx-aarch64/stack"
@@ -19,5 +19,7 @@ task:
     - if [ -n "$CIRRUS_TAG" ]; then VER="${CIRRUS_TAG#v}"; else VER="$(./stack query locals hprox version)-$(git rev-parse --short HEAD)"; fi
     - tar czvf "hprox-$VER-darwin-aarch64.tar.gz" -C ~/.local/bin hprox
     - rm -rf "$(./stack path --programs)"
+  cleanup_script:
+    - rm -rf ~/.stack/pantry ~/.stack/programs
   release_artifacts:
     path: ./hprox-*.tar.gz
