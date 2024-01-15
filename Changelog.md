@@ -1,3 +1,9 @@
+## 0.6.2
+
+- fixes to improve ssltest result
+- unix: support setuid after binding port
+- remove graceful close
+
 ## 0.6.1
 
 - multiple certificates and SNI support for HTTP/3
