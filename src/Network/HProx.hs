@@ -38,7 +38,6 @@ import Network.Wai.Handler.Warp
 import Network.Wai.Handler.WarpTLS
     (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
     tlsCiphers, tlsCredentials, tlsServerHooks, tlsSessionManager)
-import Text.Read                   (readMaybe)
 
 import Control.Exception    (Exception(..))
 import GHC.IO.Exception     (IOErrorType(..))
@@ -64,6 +63,7 @@ import System.Posix.User
 import Foreign.C.Types      (CInt(..))
 import System.Directory     (listDirectory)
 import System.Posix.Signals (sigUSR1)
+import Text.Read            (readMaybe)
 #endif
 #endif
 
@@ -305,9 +305,8 @@ foreign import ccall unsafe "send_signal"
 -- Taken from mighttpd2, see https://kazu-yamamoto.hatenablog.jp/entry/2020/12/10/150731 for details
 dropAllCapsExceptBind :: IO ()
 dropAllCapsExceptBind = do
-    strtids <- listDirectory ("/proc/self/task")
-    let tids = mapMaybe readMaybe strtids :: [Int]
-    forM_ tids $ \tid -> c_send_signal (fromIntegral tid) sigUSR1
+    tids <- mapMaybe readMaybe <$> listDirectory "/proc/self/task"
+    forM_ tids $ \tid -> c_send_signal tid sigUSR1
 #endif
 #endif
 
