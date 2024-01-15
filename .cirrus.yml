@@ -6,8 +6,9 @@ task:
     STACK_VER: 2.13.1
     STACK_BIN_URL: https://github.com/commercialhaskell/stack/releases/download/v${STACK_VER}/stack-${STACK_VER}-osx-aarch64.tar.gz
   stack_cache:
-    folder: ~/.stack
+    folder: ~/.stack/snapshots
     fingerprint_script:
+      - echo v2
       - grep -F resolver stack.yaml
   setup_script:
     - curl -L "${STACK_BIN_URL}" | tar xz --strip-components=1 "stack-${STACK_VER}-osx-aarch64/stack"

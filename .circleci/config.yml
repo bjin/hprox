@@ -20,7 +20,7 @@ jobs:
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-x86_64-v2-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -39,9 +39,9 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-x86_64-v2-{{ checksum ".stackage-resolver" }}
           paths:
-            - ~/.stack
+            - ~/.stack/snapshots
   build-aarch64:
     machine:
       image: ubuntu-2204:current
@@ -62,7 +62,7 @@ jobs:
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-aarch64-v2-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -81,9 +81,9 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-aarch64-v2-{{ checksum ".stackage-resolver" }}
           paths:
-            - ~/.stack
+            - ~/.stack/snapshots
   build-windows:
     machine:
       image: windows-server-2022-gui:current
@@ -95,12 +95,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Prepare environment
+          name: Generate .stackage-resolver
           command: |
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-windows-v2-{{ checksum ".stackage-resolver" }}
       - run:
           name: Prepare environment
           command: |
@@ -127,9 +127,9 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-windows-v2-{{ checksum ".stackage-resolver" }}
           paths:
-            - ~/AppData/Roaming/stack
+            - ~/AppData/Roaming/stack/snapshots
 workflows:
   build:
     jobs:
