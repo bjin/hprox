@@ -130,4 +130,4 @@ removePaddingVariant1 n = do
             if LBS.length bs /= len + paddingLen
                 then return ()
                 else yield (LBS.toStrict $ LBS.take len bs) >> removePaddingVariant1 (n - 1)
-        _ -> return ()
+        _otherwise   -> return ()

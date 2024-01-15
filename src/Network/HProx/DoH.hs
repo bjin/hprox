@@ -47,7 +47,7 @@ handleDoH resolver req respond
         dnsQuery <- getRequestBodyChunk req
         case DNS.decode dnsQuery of
             Right (DNSMessage { question = [q], header = DNSHeader {..} }) -> handleQuery identifier q
-            _ -> respond errorResp
+            _otherwise                                                     -> respond errorResp
     | otherwise = respond errorResp
   where
     errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"

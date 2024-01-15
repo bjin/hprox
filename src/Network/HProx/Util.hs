@@ -48,8 +48,8 @@ passwordReader line = case BS8.split ':' line of
     [user, pass]         -> Just (user, PlainText pass)
     [user, salt, hashed] -> case (Base64.decode salt, Base64.decode hashed) of
                                 (Right salt', Right hashed') -> Just (user, Salted salt' hashed')
-                                _                            -> Nothing
-    _                    -> Nothing
+                                _otherwise                   -> Nothing
+    _otherwise           -> Nothing
 
 passwordWriter :: BS.ByteString -> PasswordSalted -> BS.ByteString
 passwordWriter user (PasswordSalted salt hash) =

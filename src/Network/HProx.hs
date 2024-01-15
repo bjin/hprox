@@ -38,6 +38,7 @@ import Network.Wai.Handler.Warp
 import Network.Wai.Handler.WarpTLS
     (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
     tlsCiphers, tlsCredentials, tlsServerHooks, tlsSessionManager)
+import Text.Read                   (readMaybe)
 
 import Control.Exception    (Exception(..))
 import GHC.IO.Exception     (IOErrorType(..))
@@ -125,7 +126,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
   where
     parseSSL s = case splitBy ':' s of
         host :| [cert, key] -> Right (host, CertFile cert key)
-        _                   -> Left "invalid format for ssl certificates"
+        _otherwise          -> Left "invalid format for ssl certificates"
 
     parseRev0 s@('/':_) = case elemIndices '/' s of
         []      -> Nothing
@@ -305,7 +306,7 @@ foreign import ccall unsafe "send_signal"
 dropAllCapsExceptBind :: IO ()
 dropAllCapsExceptBind = do
     strtids <- listDirectory ("/proc/self/task")
-    let tids = map read strtids :: [Int]
+    let tids = mapMaybe readMaybe strtids :: [Int]
     forM_ tids $ \tid -> c_send_signal (fromIntegral tid) sigUSR1
 #endif
 #endif
