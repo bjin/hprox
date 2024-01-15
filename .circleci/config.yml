@@ -5,7 +5,7 @@ jobs:
       image: ubuntu-2204:current
     resource_class: medium
     environment:
-      - DOCKER_REPO: bjin/stack-docker:9.6.3
+      - DOCKER_REPO: bjin/stack-docker:9.6.4
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -16,9 +16,11 @@ jobs:
             docker create --name stack-docker "$DOCKER_REPO"
             docker cp stack-docker:/usr/local/bin/stack .
             docker rm stack-docker
+            printf "compiler-check: newer-minor\n" >> stack.yaml # remove when lts-22 start using 9.6.4
+            grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-x86_64-{{ checksum "stack.yaml" }}
+          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -37,7 +39,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-x86_64-{{ checksum "stack.yaml" }}
+          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/.stack
   build-aarch64:
@@ -45,7 +47,7 @@ jobs:
       image: ubuntu-2204:current
     resource_class: arm.medium
     environment:
-      - DOCKER_REPO: bjin/stack-docker-aarch64:9.6.3
+      - DOCKER_REPO: bjin/stack-docker-aarch64:9.6.4
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -56,9 +58,11 @@ jobs:
             docker create --name stack-docker "$DOCKER_REPO"
             docker cp stack-docker:/usr/local/bin/stack .
             docker rm stack-docker
+            printf "compiler-check: newer-minor\n" >> stack.yaml # remove when lts-22 start using 9.6.4
+            grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
+          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -77,7 +81,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-aarch64-{{ checksum "stack.yaml" }}
+          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/.stack
   build-windows:
@@ -90,9 +94,13 @@ jobs:
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
+      - run:
+          name: Prepare environment
+          command: |
+            grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-windows-{{ checksum "stack.yaml" }}
+          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
       - run:
           name: Prepare environment
           command: |
@@ -119,7 +127,7 @@ jobs:
           destination: release
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-windows-{{ checksum "stack.yaml" }}
+          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/AppData/Roaming/stack
 workflows:
