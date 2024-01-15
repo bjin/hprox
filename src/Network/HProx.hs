@@ -374,7 +374,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             | Just ConnectionClosedByPeer <- fromException ex   = return ()
             | otherwise                                         =
                 logger DEBUG $ "exception: " <> toLogStr (displayException ex) <>
-                    (if isJust req then " from: " <> logRequest (fromJust req) else "")
+                    maybe "" (\req' -> " from: " <> logRequest req') req
 
         warpLogger req status _
             | rawPathInfo req == "/.hprox/health" = return ()
@@ -478,9 +478,9 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                 httpProxy pset manager $
                 reverseProxy pset manager fallback
 
-    when (isJust _ws) $ logger INFO $ "websocket redirect: " <> toLogStr (fromJust _ws)
+    forM_ _ws $ \ws -> logger INFO $ "websocket redirect: " <> toLogStr ws
     unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
-    when (isJust _doh) $ logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr (fromJust _doh)
+    forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
 
     case _doh of
         Nothing  -> runner proxy

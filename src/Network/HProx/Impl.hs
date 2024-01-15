@@ -19,7 +19,7 @@ module Network.HProx.Impl
 import Control.Applicative        ((<|>))
 import Control.Concurrent.Async   (cancel, wait, waitEither, withAsync)
 import Control.Exception          (SomeException, try)
-import Control.Monad              (unless, void, when)
+import Control.Monad              (forM_, unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
 import Data.Binary.Builder        qualified as BB
 import Data.ByteString            qualified as BS
@@ -103,17 +103,18 @@ isToStripHeader :: HT.HeaderName -> Bool
 isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
 checkAuth :: ProxySettings -> Request -> Bool
-checkAuth ProxySettings{..} req
-    | isNothing proxyAuth = True
-    | isNothing authRsp   = False
-    | otherwise           =
-        pureLogger logger TRACE (authMsg <> " request (credential: " <> toLogStr decodedRsp <> ") from " <> toLogStr (show (remoteHost req))) authorized
+checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
+    (Nothing, _)                -> True
+    (_, Nothing)                -> False
+    (Just check, Just provided) ->
+        let decoded = decodeLenient $ snd $ BS8.spanEnd (/=' ') provided
+            authorized = check decoded
+            authMsg = if authorized then "authorized" else "unauthorized"
+            logMsg = authMsg <> " request (credential: " <> toLogStr decoded <> ") from "
+                             <> toLogStr (show (remoteHost req))
+        in pureLogger logger TRACE logMsg authorized
   where
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
-    decodedRsp = decodeLenient $ snd $ BS8.spanEnd (/=' ') $ fromJust authRsp
-
-    authorized = fromJust proxyAuth decodedRsp
-    authMsg = if authorized then "authorized" else "unauthorized"
 
 parseConnectProxy :: Request -> Maybe (BS.ByteString, Int)
 parseConnectProxy req
@@ -252,7 +253,9 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond
     | checkAuth pset req = do
-        when (isJust mPaddingType) $ logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show (fromJust mPaddingType)) <> " for " <> logRequest req
+        forM_ mPaddingType $ \paddingType ->
+            logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
+                           " for " <> logRequest req
         respondResponse
     | hideProxyAuth      = do
         logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
