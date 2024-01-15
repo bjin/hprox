@@ -8,7 +8,7 @@ task:
   stack_cache:
     folder: ~/.stack
     fingerprint_script:
-      - echo v3
+      - echo v4
       - grep -F resolver stack.yaml
   setup_script:
     - curl -L "${STACK_BIN_URL}" | tar xz --strip-components=1 "stack-${STACK_VER}-osx-aarch64/stack"
@@ -20,6 +20,6 @@ task:
     - tar czvf "hprox-$VER-darwin-aarch64.tar.gz" -C ~/.local/bin hprox
     - rm -rf "$(./stack path --programs)"
   cleanup_script:
-    - rm -rf ~/.stack/pantry ~/.stack/programs
+    - rm -rf ~/.stack/pantry/hackage ~/.stack/programs
   release_artifacts:
     path: ./hprox-*.tar.gz
