@@ -48,14 +48,14 @@ import Network.HProx.Naive
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
-  { proxyAuth      :: Maybe (BS.ByteString -> Bool)
-  , passPrompt     :: Maybe BS.ByteString
-  , wsRemote       :: Maybe BS.ByteString
-  , revRemoteMap   :: [(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
-  , hideProxyAuth  :: Bool
-  , naivePadding   :: Bool
-  , acmeThumbprint :: Maybe BS.ByteString
-  , logger         :: Logger
+  { proxyAuth      :: !(Maybe (BS.ByteString -> Bool))
+  , passPrompt     :: !(Maybe BS.ByteString)
+  , wsRemote       :: !(Maybe BS.ByteString)
+  , revRemoteMap   :: ![(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
+  , hideProxyAuth  :: !Bool
+  , naivePadding   :: !Bool
+  , acmeThumbprint :: !(Maybe BS.ByteString)
+  , logger         :: !Logger
   }
 
 logRequest :: Request -> LogStr

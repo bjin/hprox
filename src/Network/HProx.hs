@@ -78,25 +78,25 @@ import Paths_hprox
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
-  { _bind     :: Maybe String
-  , _port     :: Int
-  , _ssl      :: [(String, CertFile)]
-  , _auth     :: Maybe FilePath
-  , _ws       :: Maybe BS8.ByteString
-  , _rev      :: [(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
-  , _doh      :: Maybe String
-  , _hide     :: Bool
-  , _naive    :: Bool
-  , _name     :: BS8.ByteString
-  , _acme     :: Maybe BS8.ByteString
-  , _log      :: String
-  , _loglevel :: LogLevel
+  { _bind     :: !(Maybe String)
+  , _port     :: !Int
+  , _ssl      :: ![(String, CertFile)]
+  , _auth     :: !(Maybe FilePath)
+  , _ws       :: !(Maybe BS8.ByteString)
+  , _rev      :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
+  , _doh      :: !(Maybe String)
+  , _hide     :: !Bool
+  , _naive    :: !Bool
+  , _name     :: !BS8.ByteString
+  , _acme     :: !(Maybe BS8.ByteString)
+  , _log      :: !String
+  , _loglevel :: !LogLevel
 #ifdef OS_UNIX
-  , _user     :: Maybe String
-  , _group    :: Maybe String
+  , _user     :: !(Maybe String)
+  , _group    :: !(Maybe String)
 #endif
 #ifdef QUIC_ENABLED
-  , _quic     :: Maybe Int
+  , _quic     :: !(Maybe Int)
 #endif
   }
 
@@ -113,8 +113,8 @@ defaultConfig = Config Nothing 3000 [] Nothing Nothing [] Nothing False False "h
 
 -- | Certificate file pairs
 data CertFile = CertFile
-  { certfile :: FilePath
-  , keyfile  :: FilePath
+  { certfile :: !FilePath
+  , keyfile  :: !FilePath
   }
 
 readCert :: CertFile -> IO TLS.Credential
