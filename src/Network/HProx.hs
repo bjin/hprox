@@ -320,7 +320,6 @@ run :: Application -- ^ fallback application
     -> IO ()
 run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
-    logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
 
     let certfiles = _ssl
 
@@ -482,6 +481,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
     unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
     forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
 
+    logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
     case _doh of
         Nothing  -> runner proxy
         Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver proxy))
