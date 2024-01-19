@@ -16,11 +16,10 @@ jobs:
             docker create --name stack-docker "$DOCKER_REPO"
             docker cp stack-docker:/usr/local/bin/stack .
             docker rm stack-docker
-            printf "compiler-check: newer-minor\n" >> stack.yaml # remove when lts-22 start using 9.6.4
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-x86_64-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -43,7 +42,7 @@ jobs:
             rm -rf ~/.stack/pantry/hackage
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-x86_64-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-x86_64-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/.stack
   build-aarch64:
@@ -62,11 +61,10 @@ jobs:
             docker create --name stack-docker "$DOCKER_REPO"
             docker cp stack-docker:/usr/local/bin/stack .
             docker rm stack-docker
-            printf "compiler-check: newer-minor\n" >> stack.yaml # remove when lts-22 start using 9.6.4
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-aarch64-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
       - run:
           name: Build
           command: |
@@ -89,7 +87,7 @@ jobs:
             rm -rf ~/.stack/pantry/hackage
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-aarch64-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-aarch64-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/.stack
   build-windows:
@@ -108,7 +106,7 @@ jobs:
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
           name: Restore Cached Dependencies
-          key: cci-hprox-windows-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
       - run:
           name: Prepare environment
           command: |
@@ -139,7 +137,7 @@ jobs:
             rm -rf ~/AppData/Roaming/stack/pantry/hackage ~/AppData/Roaming/stack/programs
       - save_cache:
           name: Cache Dependencies
-          key: cci-hprox-windows-v4-{{ checksum ".stackage-resolver" }}
+          key: cci-hprox-windows-{{ checksum ".stackage-resolver" }}
           paths:
             - ~/AppData/Roaming/stack
 workflows:

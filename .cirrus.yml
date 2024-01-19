@@ -8,7 +8,6 @@ task:
   stack_cache:
     folder: ~/.stack
     fingerprint_script:
-      - echo v4
       - grep -F resolver stack.yaml
   setup_script:
     - curl -L "${STACK_BIN_URL}" | tar xz --strip-components=1 "stack-${STACK_VER}-osx-aarch64/stack"
