@@ -21,4 +21,5 @@ flags:
 apply-ghc-options: everything
 nix:
   packages:
+  - libcap
   - zlib
