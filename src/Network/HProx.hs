@@ -21,7 +21,7 @@ module Network.HProx
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.HashMap.Strict         qualified as HM
-import Data.List                   (elemIndex, elemIndices, find, isSuffixOf, sortOn, (\\))
+import Data.List                   (elemIndex, elemIndices, isSuffixOf, sortOn, (\\))
 import Data.List.NonEmpty          (NonEmpty(..))
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
@@ -46,6 +46,7 @@ import System.IO.Error      (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
 import Control.Concurrent.Async     (mapConcurrently_)
+import Data.List                    (find)
 import Network.QUIC                 qualified as Q
 import Network.QUIC.Internal        qualified as Q
 import Network.Wai.Handler.Warp     (setAltSvc)
@@ -353,9 +354,10 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
 #elif defined(QUIC_ENABLED)
             case (dropped, _quic) of
                 (True, Just qport) | qport < 1024 -> logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
+                (True, _) -> logger INFO "root priviledge dropped"
                 _ -> return ()
 #else
-            return ()
+            when dropped $ logger INFO "root priviledge dropped"
 #endif
 #endif
 
