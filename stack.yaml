@@ -1,13 +1,17 @@
 resolver: lts-22.7
 packages:
 - '.'
+allow-newer: true
+allow-newer-deps:
+- warp-tls
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.3.31-patched
+  commit: warp-3.4.0-patched
   subdirs:
   - warp
 - crypto-token-0.1.0
-- http3-0.0.7
+- http2-5.1.0
+- http3-0.0.8
 - network-udp-0.0.0
 - quic-0.1.15
 - sockaddr-0.0.1
