@@ -21,7 +21,7 @@ module Network.HProx
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.HashMap.Strict         qualified as HM
-import Data.List                   (elemIndex, elemIndices, isSuffixOf, sortOn, (\\))
+import Data.List                   (elemIndex, elemIndices, isSuffixOf, sortOn)
 import Data.List.NonEmpty          (NonEmpty(..))
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
@@ -29,7 +29,6 @@ import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
 import Network.HTTP.Types          qualified as HT
 import Network.TLS                 qualified as TLS
-import Network.TLS.Extra.Cipher    qualified as TLS
 import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
@@ -37,7 +36,7 @@ import Network.Wai.Handler.Warp
     setLogger, setNoParsePath, setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
-    tlsCiphers, tlsCredentials, tlsServerHooks, tlsSessionManager)
+    tlsCredentials, tlsServerHooks, tlsSessionManager)
 
 import Control.Exception    (Exception(..))
 import GHC.IO.Exception     (IOErrorType(..))
@@ -382,24 +381,11 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             | otherwise                           =
                 logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
-        -- https://www.ssllabs.com/ssltest
-        -- https://github.com/haskell-tls/hs-tls/blob/master/core/Network/TLS/Extra/Cipher.hs
-        weak_ciphers = [ TLS.cipher_ECDHE_RSA_AES256CBC_SHA384
-                       , TLS.cipher_ECDHE_RSA_AES256CBC_SHA
-                       , TLS.cipher_AES256CCM_SHA256
-                       , TLS.cipher_AES256GCM_SHA384
-                       , TLS.cipher_AES256_SHA256
-                       , TLS.cipher_AES256_SHA1
-                       , TLS.cipher_ECDHE_ECDSA_AES256CBC_SHA384
-                       , TLS.cipher_ECDHE_ECDSA_AES256CBC_SHA
-                       ]
-
         tlsset = defaultTlsSettings
             { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
             , tlsCredentials     = Just (TLS.Credentials [head certs])
             , onInsecure         = AllowInsecure
             , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
-            , tlsCiphers         = TLS.ciphersuite_strong \\ weak_ciphers
             , tlsSessionManager  = Just smgr
             }
 
@@ -423,7 +409,6 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
             , Q.scVersions       = [Q.Version1, Q.Version2]
             , Q.scCredentials    = TLS.Credentials [head certs]
-            , Q.scCiphers        = Q.scCiphers Q.defaultServerConfig \\ weak_ciphers
             , Q.scALPN           = Just alpn
             , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
             , Q.scUse0RTT        = True

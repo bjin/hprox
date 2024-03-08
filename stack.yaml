@@ -1,21 +1,19 @@
-resolver: lts-22.7
+resolver: lts-22.13
 packages:
 - '.'
-allow-newer: true
-allow-newer-deps:
-- warp-tls
 extra-deps:
 - github: bjin/wai
   commit: warp-3.4.0-patched
   subdirs:
   - warp
-- crypto-token-0.1.0
-- http2-5.1.0
-- http3-0.0.8
+- crypto-token-0.1.1
+- http2-5.1.2
+- http3-0.0.9
 - network-udp-0.0.0
-- quic-0.1.15
+- quic-0.1.16
 - sockaddr-0.0.1
-- tls-1.9.0
+- tls-2.0.1
+- tls-session-manager-0.0.5
 - warp-quic-0.0.0
 drop-packages:
 - cryptonite
