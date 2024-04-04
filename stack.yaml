@@ -1,4 +1,4 @@
-resolver: lts-22.13
+resolver: lts-22.15
 packages:
 - '.'
 extra-deps:
@@ -7,12 +7,13 @@ extra-deps:
   subdirs:
   - warp
 - crypto-token-0.1.1
-- http2-5.1.2
+- http2-5.1.4
 - http3-0.0.9
+- network-control-0.1.0
 - network-udp-0.0.0
-- quic-0.1.16
+- quic-0.1.19
 - sockaddr-0.0.1
-- tls-2.0.1
+- tls-2.0.2
 - tls-session-manager-0.0.5
 - warp-quic-0.0.0
 drop-packages:
