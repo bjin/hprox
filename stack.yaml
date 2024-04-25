@@ -1,4 +1,4 @@
-resolver: lts-22.16
+resolver: lts-22.18
 packages:
 - '.'
 extra-deps:
@@ -13,7 +13,7 @@ extra-deps:
 - network-udp-0.0.0
 - quic-0.1.20
 - sockaddr-0.0.1
-- tls-2.0.2
+- tls-2.0.5
 - tls-session-manager-0.0.5
 - warp-quic-0.0.0
 drop-packages:
