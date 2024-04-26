@@ -18,27 +18,31 @@ module Network.HProx
   , run
   ) where
 
-import Data.ByteString.Char8       qualified as BS8
-import Data.Default.Class          (def)
-import Data.HashMap.Strict         qualified as HM
-import Data.List                   (elemIndex, elemIndices, isSuffixOf, sortOn)
-import Data.List.NonEmpty          (NonEmpty(..))
-import Data.Ord                    (Down(..))
-import Data.String                 (fromString)
-import Data.Version                (showVersion)
-import Network.HTTP.Client.TLS     (newTlsManager)
-import Network.HTTP.Types          qualified as HT
-import Network.TLS                 qualified as TLS
-import Network.TLS.SessionManager  qualified as SM
-import Network.Wai                 (Application, rawPathInfo)
+import Data.ByteString.Char8      qualified as BS8
+import Data.Default.Class         (def)
+import Data.HashMap.Strict        qualified as HM
+import Data.List                  (elemIndex, elemIndices, isSuffixOf, sortOn)
+import Data.List.NonEmpty         (NonEmpty(..))
+import Data.Ord                   (Down(..))
+import Data.Streaming.Network     (bindPortTCP)
+import Data.String                (fromString)
+import Data.Version               (showVersion)
+import Network.HTTP.Client.TLS    (newTlsManager)
+import Network.HTTP.Types         qualified as HT
+import Network.Socket             (SocketOption(..), close, setSocketOption)
+import Network.TLS                qualified as TLS
+import Network.TLS.SessionManager qualified as SM
+import Network.Wai                (Application, rawPathInfo)
+
 import Network.Wai.Handler.Warp
     (InvalidRequest(..), defaultSettings, defaultShouldDisplayException, runSettings, setHost,
     setLogger, setNoParsePath, setOnException, setPort, setServerName)
+import Network.Wai.Handler.Warp          qualified as Warp
+import Network.Wai.Handler.Warp.Internal qualified as Warp
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
-    tlsCredentials, tlsServerHooks, tlsSessionManager)
+    (OnInsecure(..), TLSSettings(..), WarpTLSException, defaultTlsSettings, runTLSSocket)
 
-import Control.Exception    (Exception(..))
+import Control.Exception    (Exception(..), bracket)
 import GHC.IO.Exception     (IOErrorType(..))
 import Network.HTTP2.Client qualified as H2
 import System.IO.Error      (ioeGetErrorType)
@@ -310,6 +314,17 @@ dropAllCapsExceptBind = do
 #endif
 #endif
 
+runTLS :: TLSSettings -> Warp.Settings -> Bool -> Application -> IO ()
+runTLS tset set nodelay app =
+    bracket
+        (bindPortTCP (Warp.getPort set) (Warp.getHost set))
+        close
+        ( \sock -> do
+            Warp.setSocketCloseOnExec sock
+            when nodelay $ setSocketOption sock NoDelay 1
+            runTLSSocket tset set sock app
+        )
+
 -- | Read 'Config' from command line arguments
 getConfig :: IO Config
 getConfig = execParser parser
@@ -420,11 +435,11 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
                     logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
                     mapConcurrently_ ($ app)
                         [ runQUIC (quicset qport) settings
-                        , runTLS tlsset (setAltSvc (altsvc qport) settings)
+                        , runTLS tlsset (setAltSvc (altsvc qport) settings) _naive
                         ]
-               | otherwise           = runTLS tlsset settings
+               | otherwise           = runTLS tlsset settings _naive
 #else
-        runner | isSSL     = runTLS tlsset settings
+        runner | isSSL     = runTLS tlsset settings _naive
                | otherwise = runSettings settings
 #endif
 

@@ -64,8 +64,10 @@ library:
   - http-reverse-proxy >= 0.6.0.2
   - http-types >= 0.12
   - http2 >= 4.0
+  - network
   - optparse-applicative >= 0.14
   - random >= 1.2.1
+  - streaming-commons
   - text
   - tls >= 1.5
   - tls-session-manager >= 0.0.4
