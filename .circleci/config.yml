@@ -5,7 +5,7 @@ jobs:
       image: ubuntu-2204:current
     resource_class: medium
     environment:
-      - DOCKER_REPO: bjin/stack-docker:9.6.4
+      - DOCKER_REPO: benz0li/ghc-musl:9.6.5
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -13,8 +13,9 @@ jobs:
           name: Prepare environment
           command: |
             docker pull "$DOCKER_REPO"
-            docker create --name stack-docker "$DOCKER_REPO"
+            docker run --name stack-docker "$DOCKER_REPO" apk add --no-cache libcap-dev
             docker cp stack-docker:/usr/local/bin/stack .
+            docker commit stack-docker stack-builder
             docker rm stack-docker
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
@@ -25,7 +26,7 @@ jobs:
           command: |
             ./stack \
                 --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe image \
+                --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
@@ -50,7 +51,7 @@ jobs:
       image: ubuntu-2204:current
     resource_class: arm.medium
     environment:
-      - DOCKER_REPO: bjin/stack-docker-aarch64:9.6.4
+      - DOCKER_REPO: benz0li/ghc-musl:9.6.5
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -58,8 +59,9 @@ jobs:
           name: Prepare environment
           command: |
             docker pull "$DOCKER_REPO"
-            docker create --name stack-docker "$DOCKER_REPO"
+            docker run --name stack-docker "$DOCKER_REPO" apk add --no-cache libcap-dev
             docker cp stack-docker:/usr/local/bin/stack .
+            docker commit stack-docker stack-builder
             docker rm stack-docker
             grep -F resolver stack.yaml | tee .stackage-resolver
       - restore_cache:
@@ -70,7 +72,7 @@ jobs:
           command: |
             ./stack \
                 --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
-                --docker --docker-repo "$DOCKER_REPO" --docker-stack-exe image \
+                --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
@@ -96,7 +98,7 @@ jobs:
       shell: bash.exe
     resource_class: windows.medium
     environment:
-      - STACK_VER: 2.13.1
+      - STACK_VER: 2.15.7
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
