@@ -1,3 +1,8 @@
+## 0.6.3
+
+- bump stack dependencies
+- fix Content-Length header for encoded HTTP responses in reverse proxy mode
+
 ## 0.6.2
 
 - fixes to improve ssltest result

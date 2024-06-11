@@ -1,4 +1,4 @@
-resolver: lts-22.24
+resolver: lts-22.25
 packages:
 - '.'
 extra-deps:
@@ -6,8 +6,6 @@ extra-deps:
   commit: warp-3.4.1-patched
   subdirs:
   - warp
-- github: bjin/http-reverse-proxy
-  commit: fix-encoding
 - auto-update-0.2.0
 - crypto-token-0.1.1
 - http-semantics-0.0.1
