@@ -1,4 +1,4 @@
-resolver: lts-22.25
+resolver: lts-22.26
 packages:
 - '.'
 extra-deps:
@@ -8,17 +8,19 @@ extra-deps:
   - warp
 - auto-update-0.2.0
 - crypto-token-0.1.1
-- http-semantics-0.0.1
-- http2-5.2.2
-- http3-0.0.12
+- crypton-connection-0.4.1
+- http-semantics-0.1.2
+- http2-5.2.6
+- http3-0.0.14
 - network-control-0.1.0
 - network-udp-0.0.0
-- quic-0.1.20
+- quic-0.1.26
 - sockaddr-0.0.1
 - time-manager-0.1.0
-- tls-2.0.6
-- tls-session-manager-0.0.5
+- tls-2.1.0
+- tls-session-manager-0.0.6
 - warp-quic-0.0.0
+- warp-tls-3.4.6
 drop-packages:
 - cryptonite
 flags:
