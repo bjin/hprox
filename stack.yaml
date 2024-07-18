@@ -1,4 +1,4 @@
-resolver: lts-22.26
+resolver: lts-22.29
 packages:
 - '.'
 extra-deps:
@@ -6,15 +6,15 @@ extra-deps:
   commit: warp-3.4.1-patched
   subdirs:
   - warp
-- auto-update-0.2.0
+- auto-update-0.2.1
 - crypto-token-0.1.1
 - crypton-connection-0.4.1
-- http-semantics-0.1.2
-- http2-5.2.6
-- http3-0.0.14
-- network-control-0.1.0
+- http-semantics-0.2.0
+- http2-5.3.0
+- http3-0.0.15
+- network-control-0.1.2
 - network-udp-0.0.0
-- quic-0.1.26
+- quic-0.1.27
 - sockaddr-0.0.1
 - time-manager-0.1.0
 - tls-2.1.0
@@ -23,6 +23,9 @@ extra-deps:
 - warp-tls-3.4.6
 drop-packages:
 - cryptonite
+allow-newer: true
+allow-newer-deps:
+- warp
 flags:
   hprox:
     quic: true
