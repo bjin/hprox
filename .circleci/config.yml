@@ -98,7 +98,7 @@ jobs:
       shell: bash.exe
     resource_class: windows.medium
     environment:
-      - STACK_VER: 2.15.7
+      - STACK_VER: 3.1.1
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
