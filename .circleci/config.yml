@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   build-x86_64:
     machine:
-      image: ubuntu-2204:current
+      image: ubuntu-2404:current
     resource_class: medium
     environment:
       - DOCKER_REPO: benz0li/ghc-musl:9.6.6
@@ -48,7 +48,7 @@ jobs:
             - ~/.stack
   build-aarch64:
     machine:
-      image: ubuntu-2204:current
+      image: ubuntu-2404:current
     resource_class: arm.medium
     environment:
       - DOCKER_REPO: benz0li/ghc-musl:9.6.6
@@ -94,7 +94,7 @@ jobs:
             - ~/.stack
   build-windows:
     machine:
-      image: windows-server-2022-gui:current
+      image: default
       shell: bash.exe
     resource_class: windows.medium
     environment:
