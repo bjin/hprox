@@ -1,5 +1,10 @@
 ## 0.6.3
 
+- bump bump stack dependencies
+- build with GHC 9.8
+
+## 0.6.3
+
 - bump stack dependencies
 - fix Content-Length header for encoded HTTP responses in reverse proxy mode
 
