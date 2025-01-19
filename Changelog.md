@@ -1,4 +1,4 @@
-## 0.6.3
+## 0.6.4
 
 - bump bump stack dependencies
 - build with GHC 9.8
