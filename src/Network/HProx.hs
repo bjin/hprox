@@ -58,13 +58,6 @@ import Network.Wai.Handler.Warp (setBeforeMainLoop)
 import System.Exit
 import System.Posix.Process     (exitImmediately)
 import System.Posix.User
-
-#ifdef DROP_ALL_CAPS_EXCEPT_BIND
-import Foreign.C.Types      (CInt(..))
-import System.Directory     (listDirectory)
-import System.Posix.Signals (sigUSR1)
-import Text.Read            (readMaybe)
-#endif
 #endif
 
 import Control.Monad
@@ -297,17 +290,6 @@ dropRootPriviledge logger user group = do
         changedUser <- getRealUserID
         when (changedUser == 0) $ abort "unable to drop root priviledge, aborting"
         return True
-
-#ifdef DROP_ALL_CAPS_EXCEPT_BIND
-foreign import ccall unsafe "send_signal"
-  c_send_signal :: CInt -> CInt -> IO ()
-
--- Taken from mighttpd2, see https://kazu-yamamoto.hatenablog.jp/entry/2020/12/10/150731 for details
-dropAllCapsExceptBind :: IO ()
-dropAllCapsExceptBind = do
-    tids <- mapMaybe readMaybe <$> listDirectory "/proc/self/task"
-    forM_ tids $ \tid -> c_send_signal tid sigUSR1
-#endif
 #endif
 
 -- | Read 'Config' from command line arguments
@@ -346,11 +328,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
 #ifdef OS_UNIX
         doBeforeMainLoop = do
             dropped <- dropRootPriviledge logger _user _group
-#if defined(DROP_ALL_CAPS_EXCEPT_BIND)
-            when dropped $ do
-                logger INFO "drop all capabilities except CAP_NET_BIND_SERVICE"
-                dropAllCapsExceptBind
-#elif defined(QUIC_ENABLED)
+#ifdef QUIC_ENABLED
             case (dropped, _quic) of
                 (True, Just qport) | qport < 1024 -> logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
                 (True, _) -> logger INFO "root priviledge dropped"

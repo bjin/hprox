@@ -81,12 +81,6 @@ library:
     - http3 >= 0.0.3
     - quic >= 0.1.15
     - warp-quic
-    when:
-    - condition: os(linux)
-      cpp-options: -DDROP_ALL_CAPS_EXCEPT_BIND
-      c-sources: cbits/setcap.c
-      dependencies:
-      - directory >= 1.2.5.0
   - condition: '!os(windows)'
     cpp-options: -DOS_UNIX
     dependencies:
