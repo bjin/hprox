@@ -1,18 +1,27 @@
-resolver: lts-23.4
+resolver: lts-24.30
 packages:
 - '.'
 extra-deps:
 - github: bjin/wai
-  commit: warp-3.4.7-patched
+  commit: warp-3.4.12-patched
   subdirs:
   - warp
-- http3-0.0.22
+- crypton-asn1-encoding-0.10.0
+- crypton-asn1-parse-0.10.0
+- crypton-asn1-types-0.4.1
+- crypton-x509-1.8.0
+- crypton-x509-store-1.8.0
+- crypton-x509-system-1.8.0
+- crypton-x509-validation-1.8.0
+- http-semantics-0.4.0
+- http2-5.4.0
+- http3-0.1.2
 - network-udp-0.0.0
-- quic-0.2.7
+- quic-0.2.23
 - sockaddr-0.0.1
-- tls-2.1.6
-- warp-quic-0.0.2
-- warp-tls-3.4.12
+- time-hourglass-0.3.0
+- tls-2.2.2
+- warp-quic-0.0.3
 drop-packages:
 - cryptonite
 flags:

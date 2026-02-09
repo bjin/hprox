@@ -5,7 +5,7 @@ jobs:
       image: ubuntu-2404:current
     resource_class: medium
     environment:
-      - DOCKER_REPO: benz0li/ghc-musl:9.8.4
+      - DOCKER_REPO: benz0li/ghc-musl:9.10.3
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -51,7 +51,7 @@ jobs:
       image: ubuntu-2404:current
     resource_class: arm.medium
     environment:
-      - DOCKER_REPO: benz0li/ghc-musl:9.8.4
+      - DOCKER_REPO: benz0li/ghc-musl:9.10.3
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
@@ -98,7 +98,7 @@ jobs:
       shell: bash.exe
     resource_class: windows.medium
     environment:
-      - STACK_VER: 3.1.1
+      - STACK_VER: 3.9.1
       - GHC_OPTIONS: --ghc-options -split-sections --ghc-options -O --ghc-options -optc-Os
     steps:
       - checkout
