@@ -1,6 +1,13 @@
+
+## 0.6.5
+
+- bump stack dependencies
+- build with GHC 9.10
+- remove DROP_ALL_CAPS_EXCEPT_BIND
+
 ## 0.6.4
 
-- bump bump stack dependencies
+- bump stack dependencies
 - build with GHC 9.8
 
 ## 0.6.3
