@@ -359,9 +359,9 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             | otherwise                           =
                 logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
-        tlsset = defaultTlsSettings
+        tlsset defaultCert = defaultTlsSettings
             { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
-            , tlsCredentials     = Just (TLS.Credentials [head certs])
+            , tlsCredentials     = Just (TLS.Credentials [defaultCert])
             , onInsecure         = AllowInsecure
             , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
             , tlsSessionManager  = Just smgr
@@ -383,27 +383,29 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
         alpn _ = return . fromMaybe "" . find (== "h3")
         altsvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
 
-        quicset qport = Q.defaultServerConfig
+        quicset defaultCert qport = Q.defaultServerConfig
             { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
             , Q.scVersions       = [Q.Version1, Q.Version2]
-            , Q.scCredentials    = TLS.Credentials [head certs]
+            , Q.scCredentials    = TLS.Credentials [defaultCert]
             , Q.scALPN           = Just alpn
             , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
             , Q.scUse0RTT        = True
             , Q.scSessionManager = smgr
             }
 
-        runner | not isSSL           = runSettings settings
-               | Just qport <- _quic = \app -> do
-                    logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
-                    mapConcurrently_ ($ app)
-                        [ runQUIC (quicset qport) settings
-                        , runTLS tlsset (setAltSvc (altsvc qport) settings)
-                        ]
-               | otherwise           = runTLS tlsset settings
+        runner = case allCerts of
+            []                  -> runSettings settings
+            (_, defaultCert) : _ | Just qport <- _quic -> \app -> do
+                logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
+                mapConcurrently_ ($ app)
+                    [ runQUIC (quicset defaultCert qport) settings
+                    , runTLS (tlsset defaultCert) (setAltSvc (altsvc qport) settings)
+                    ]
+            (_, defaultCert) : _ -> runTLS (tlsset defaultCert) settings
 #else
-        runner | isSSL     = runTLS tlsset settings
-               | otherwise = runSettings settings
+        runner = case allCerts of
+            []                   -> runSettings settings
+            (_, defaultCert) : _ -> runTLS (tlsset defaultCert) settings
 #endif
 
     pauth <- case _auth of
