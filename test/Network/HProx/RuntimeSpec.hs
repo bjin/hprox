@@ -17,7 +17,8 @@ import Network.Wai.Handler.WarpTLS
 import System.IO.Error             (mkIOError)
 
 #ifdef QUIC_ENABLED
-import Network.QUIC.Internal qualified as Q
+import Network.HProx.Platform.Quic
+import Network.QUIC.Internal       qualified as Q
 #endif
 
 import Network.HProx.Config
@@ -80,7 +81,6 @@ spec = do
           , runtimeNoParsePath = True
           }
 
-
   describe "runner selection" $ do
     it "selects the plain Warp runner when no certificates are configured" $
       selectRunnerPlan defaultConfig [] `shouldBe` PlainWarpRunner
@@ -95,6 +95,12 @@ spec = do
 
     it "does not select QUIC without configured certificates" $
       selectRunnerPlan defaultConfig { _quic = Just 443 } [] `shouldBe` PlainWarpRunner
+
+    it "builds safer QUIC defaults" $ do
+      quicUse0RTT `shouldBe` False
+      quicAddressPlan Nothing 8443 `shouldBe` [("0.0.0.0", 8443), ("::", 8443)]
+      quicAddressPlan (Just "127.0.0.1") 8443 `shouldBe` [("127.0.0.1", 8443)]
+      quicAltSvc 8443 `shouldBe` "h3=\":8443\""
 #endif
 
   describe "DoH wrapping decision" $ do

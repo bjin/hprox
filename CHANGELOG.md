@@ -3,6 +3,7 @@
 ### Added
 - Added an Hspec-based `hprox-test` suite with characterization coverage for CLI/default parsing, pure helpers, auth-file loading and rewriting, middleware endpoints, reverse-proxy routing and rewrites, HTTP/CONNECT proxy decisions, TLS/SNI selection, Warp/runtime exception handling, runner selection, DoH behavior, and naiveproxy padding.
 - Added internal domain/runtime seams for `Config`, auth loading, reverse routes, proxy runtime construction, TLS/SNI setup, Warp settings, runner selection, platform-specific Unix/QUIC startup, log output parsing, header policy, DoH requests, and runtime configuration.
+- Added runtime-spec coverage for safer QUIC defaults, including 0-RTT disablement, dual-stack wildcard binds, and Alt-Svc rendering assertions
 
 ### Changed
 - Refactored `Network.HProx.run` into focused internal modules while preserving the public `Network.HProx` API and existing runtime behavior.
@@ -14,6 +15,9 @@
 - Updated copyright notices to 2026 in LICENSE, package metadata, and all touched source/test headers
 - Hardened auth-file handling by stripping one trailing carriage return from each entry before parsing, hashing, and rewrite decisions
 - Normalized reverse route host/path matching behavior is now stricter and more tolerant of case in host names
+- Disabled QUIC 0-RTT startup by default and exposed configurable QUIC helper seams for safer runtime behavior tests
+- Changed default QUIC bind behavior to listen on both 0.0.0.0 and :: when no explicit bind is provided, while singleton binds remain single-address
+- Updated QUIC bind logging to report all interfaces when the bind address is not configured explicitly
 
 ### Fixed
 - Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.
@@ -34,11 +38,13 @@
 - Differentiated DNS resolver failures in DoH by returning HTTP 502 (Bad Gateway) with `dns resolver failure` instead of reusing the malformed-request 400 response
 - Rejected chunked DoH POST bodies that exceed the 4096-byte limit with HTTP 400 malformed-request handling
 - Preserved malformed client input handling on HTTP 400 while adding successful chunked POST parsing support within existing size bounds
+- Preserved Alt-Svc advertisement formatting by centralizing it in a dedicated helper used by TLS setup
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
 - Prevented auth-file logging from leaking password-like fragments by replacing raw-line diagnostics with non-sensitive context
 - Hardened SNI matching to use ASCII case-insensitive host checks and reject invalid wildcard matches
+- Disabled QUIC 0-RTT by default to reduce replay and forward-secrecy risk when accepting early data
 ## 0.6.5
 
 - bump stack dependencies
