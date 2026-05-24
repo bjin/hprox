@@ -6,12 +6,18 @@ module Network.HProx.TLSSpec
   ( spec
   ) where
 
+import Control.Exception     (ErrorCall, SomeException, displayException, fromException, try)
+import Data.Maybe            (isNothing)
+import Network.HProx.Config  (CertFile(..))
 import Network.HProx.Runtime
+import Network.TLS           qualified as TLS
 
+import System.Directory (getTemporaryDirectory, removeFile)
+import System.IO        (hClose, openTempFile)
 import Test.Hspec
 
 spec :: Spec
-spec =
+spec = do
   describe "SNI selection" $ do
     it "keeps the first configured certificate as the default certificate" $
       defaultCertificate certFixtures `shouldBe` Just "first-cert"
@@ -46,8 +52,30 @@ spec =
       lookupSNIHost Nothing [("example.com", "cert" :: String)]
         `shouldBe` Left "SNI: unspecified"
 
+  describe "TLS credential loading" $
+    it "throws a contextual IO exception when certificate loading fails" $ do
+      certPath <- missingPath "hprox-missing-cert.pem"
+      keyPath <- missingPath "hprox-missing-key.pem"
+      result <- try (loadTlsCredentials [("example.com", CertFile certPath keyPath)]) :: IO (Either SomeException [(String, TLS.Credential)])
+      case result of
+        Left ex -> do
+          fromException ex `shouldSatisfy` (isNothing :: Maybe ErrorCall -> Bool)
+          let message = displayException ex
+          message `shouldContain` "example.com"
+          message `shouldContain` certPath
+          message `shouldContain` keyPath
+        Right _ -> expectationFailure "expected TLS credential loading to fail"
+
 certFixtures :: [(String, String)]
 certFixtures =
   [ ("first.example", "first-cert")
   , ("second.example", "second-cert")
   ]
+
+missingPath :: String -> IO FilePath
+missingPath template = do
+  tmpDir <- getTemporaryDirectory
+  (path, handle) <- openTempFile tmpDir template
+  hClose handle
+  removeFile path
+  return path

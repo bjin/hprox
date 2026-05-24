@@ -32,7 +32,8 @@ module Network.HProx.Runtime
   , validateRuntimeConfig
   ) where
 
-import Control.Exception           (SomeException, displayException, fromException)
+import Control.Exception
+    (IOException, SomeException, displayException, fromException, try)
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.List                   (sortOn)
@@ -275,10 +276,19 @@ runtimeExceptionToLog logLevel ex
   | otherwise = Just ex
 
 loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
-loadTlsCredentials certFiles =
-  zip (map fst certFiles) <$> mapM (readTlsCredential . snd) certFiles
+loadTlsCredentials certFiles = mapM readTlsCredential certFiles
   where
-    readTlsCredential (CertFile cert key) = either error id <$> TLS.credentialLoadX509 cert key
+    readTlsCredential (name, CertFile cert key) = do
+      loadedCredential <- try (TLS.credentialLoadX509 cert key)
+      case loadedCredential of
+        Left err -> failWithContext name cert key $ displayException (err :: IOException)
+        Right (Left err) -> failWithContext name cert key err
+        Right (Right credential) -> return (name, credential)
+
+    failWithContext name cert key err =
+      ioError $ userError $
+        "failed to load TLS credential for " ++ show name ++
+        " (certificate: " ++ cert ++ ", key: " ++ key ++ "): " ++ err
 
 buildTlsSettings :: TLS.SessionManager -> [(String, TLS.Credential)] -> TLS.Credential -> TLSSettings
 buildTlsSettings sessionManager certs defaultCert = defaultTlsSettings

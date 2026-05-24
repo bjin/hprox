@@ -41,6 +41,7 @@
 - Preserved malformed client input handling on HTTP 400 while adding successful chunked POST parsing support within existing size bounds
 - Preserved Alt-Svc advertisement formatting by centralizing it in a dedicated helper used by TLS setup
 - Hardened Unix privilege dropping to resolve target user/group entries before changing IDs
+- Hardened TLS credential loading by adding contextual IO failures for missing or unreadable cert/key paths
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
