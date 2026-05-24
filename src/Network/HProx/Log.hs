@@ -9,11 +9,9 @@ module Network.HProx.Log
   , Logger
   , ToLogStr(..)
   , logLevelReader
-  , pureLogger
   , withLogger
   ) where
 
-import System.IO.Unsafe (unsafePerformIO)
 
 import System.Log.FastLogger
 
@@ -40,9 +38,6 @@ logWith logger level logstr = logger (\time -> toLogStr time <> " [" <> toLogStr
 
 type Logger = LogLevel -> LogStr -> IO ()
 
-{-# NOINLINE pureLogger #-}
-pureLogger :: Logger -> LogLevel -> LogStr -> a -> a
-pureLogger logger level str a = unsafePerformIO $ logger level str >> return a
 
 withLogger :: LogType -> LogLevel -> ((LogLevel -> LogStr -> IO ()) -> IO ()) -> IO ()
 withLogger logType logLevel toRun = do

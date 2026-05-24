@@ -103,17 +103,20 @@ isCDNHeader h = "cf-" `BS.isPrefixOf` CI.foldedCase h || h == "cdn-loop"
 isToStripHeader :: HT.HeaderName -> Bool
 isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
-checkAuth :: ProxySettings -> Request -> Bool
+checkAuth :: ProxySettings -> Request -> IO Bool
 checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
-    (Nothing, _)                -> True
-    (_, Nothing)                -> False
-    (Just check, Just provided) ->
-        let decoded = decodeLenient $ snd $ BS8.spanEnd (/=' ') provided
-            authorized = check decoded
-            authMsg = if authorized then "authorized" else "unauthorized"
-            logMsg = authMsg <> " request (credential: " <> toLogStr decoded <> ") from "
-                             <> toLogStr (show (remoteHost req))
-        in pureLogger logger TRACE logMsg authorized
+  (Nothing, _) -> return True
+
+  (_, Nothing) -> return False
+
+  (Just check, Just provided) -> do
+    let decoded = decodeLenient $ snd $ BS8.spanEnd (/=' ') provided
+        authorized = check decoded
+        authMsg = if authorized then "authorized" else "unauthorized"
+        logMsg = authMsg <> " request (credential: " <> toLogStr decoded <> ") from "
+                         <> toLogStr (show (remoteHost req))
+    logger TRACE logMsg
+    return authorized
   where
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
 
@@ -199,20 +202,24 @@ reverseProxy ProxySettings{..} mgr fallback =
            else WPRModifiedRequest nreq dest
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
-httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
+httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyResponseFor settings mgr
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
-        | redirectWebsocket pset req = wsWrapper (ProxyDest wsHost wsPort)
-        | not isGETProxy             = WPRApplication fallback
-        | checkAuth pset req         = WPRModifiedRequest nreq (ProxyDest host port)
-        | hideProxyAuth              =
-            pureLogger logger WARN ("unauthorized request (hidden without response): " <> logRequest req) $
-            WPRApplication fallback
-        | otherwise                  =
-            pureLogger logger WARN ("unauthorized request: " <> logRequest req) $
-            WPRResponse (proxyAuthRequiredResponse pset)
+        | redirectWebsocket pset req = return $ wsWrapper (ProxyDest wsHost wsPort)
+        | not isGETProxy             = return $ WPRApplication fallback
+        | otherwise                  = do
+            authorized <- checkAuth pset req
+            if authorized
+              then return $ WPRModifiedRequest nreq (ProxyDest host port)
+              else if hideProxyAuth
+                     then do
+                       logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+                       return $ WPRApplication fallback
+                     else do
+                       logger WARN $ "unauthorized request: " <> logRequest req
+                       return $ WPRResponse (proxyAuthRequiredResponse pset)
       where
         (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust wsRemote)
         wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
@@ -243,18 +250,21 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.pr
                 BS.drop (BS.length rawPathPrefix) rawPath
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond
-    | checkAuth pset req = do
-        forM_ mPaddingType $ \paddingType ->
-            logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
-                           " for " <> logRequest req
-        respondResponse
-    | hideProxyAuth      = do
-        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
-        fallback req respond
-    | otherwise          = do
-        logger WARN $ "unauthorized request: " <> logRequest req
-        respond (proxyAuthRequiredResponse pset)
+httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
+  authorized <- checkAuth pset req
+  if authorized
+    then do
+      forM_ mPaddingType $ \paddingType ->
+        logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
+                       " for " <> logRequest req
+      respondResponse
+    else if hideProxyAuth
+           then do
+             logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+             fallback req respond
+           else do
+             logger WARN $ "unauthorized request: " <> logRequest req
+             respond (proxyAuthRequiredResponse pset)
   where
     settings = CN.clientSettings port host
 
