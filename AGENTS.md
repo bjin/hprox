@@ -1,170 +1,123 @@
-# hprox Agent Guidelines
+# hprox Agent Guide
 
-This document provides guidance for agentic coding assistants working on the hprox codebase.
+Use this as the fast path for future work in this repository. The codebase now has characterization tests; do not treat builds alone as enough for non-trivial changes.
 
-## Build & Test Commands
+## Commands
 
-### Build
+### Core verification
+
 ```bash
-stack build                    # Build library and executable
-stack build hprox:lib         # Build only the library
-stack build hprox:exe:hprox   # Build only the executable
-stack build --flag hprox:quic # Build with QUIC/HTTP3 support
+stack test
+stack build --pedantic
 ```
 
-### Run Executable
+### Build targets
+
 ```bash
-stack exec hprox -- --help    # View command-line help
+stack build hprox:lib
+stack build hprox:exe:hprox
+stack build --flag hprox:quic hprox:exe:hprox
+stack build --flag hprox:-quic hprox:exe:hprox
 ```
 
-### Single Test
-The project does not currently have automated tests. To validate changes:
+### Executable smoke checks
+
 ```bash
-stack build --pedantic        # Build with all warnings treated as errors
-stack build --ghc-options=-Wall --ghc-options=-Werror  # Explicit strict mode
-```
-
-### Linting & Code Formatting
-```bash
-stylish-haskell -i src/**/*.hs     # Format all source files in-place
-stylish-haskell -c src/Network/HProx.hs  # Check (don't modify) a file
-```
-
-### Check Only (No Build Artifacts)
-```bash
-stack ghc -- --make src/Network/HProx.hs  # Type-check without building
-```
-
-## Code Style Guidelines
-
-### Imports
-- Use **qualified imports** preferentially: `import Data.List qualified as List`
-- Use `ImportQualifiedPost` extension enabled globally (see package.yaml)
-- Imports are auto-formatted and grouped by stylish-haskell
-- Group imports by module first component (Control.*, Data.*, Network.*, etc.)
-- Separate unqualified and qualified imports with blank lines (group-based)
-- List alignment: use `after_alias` style for long import lists
-- Post-qualify syntax enabled: `import Data.Foo qualified as F` (not `import qualified Data.Foo as F`)
-
-### Extensions
-Default extensions enabled globally (no pragma needed):
-- `ImportQualifiedPost` - allows `qualified` at end of import
-- `OverloadedStrings` - string literals polymorphic for IsString types
-- `RecordWildCards` - enables `{..}` in record patterns and constructions
-
-Common additional extensions per-file:
-- `ScopedTypeVariables` - for scoped type signatures
-- `ViewPatterns` - for pattern guards
-- `CPP` - for conditional compilation
-
-### Formatting & Whitespace
-- **Column limit**: 100 characters (enforced by stylish-haskell)
-- **Indentation**: Spaces (2 spaces for module headers, 4 for import padding)
-- **Line endings**: LF (Unix-style)
-- **Trailing whitespace**: Remove (stylish-haskell handles this)
-- **Simple alignment**: Align `=` and `->` in case statements and patterns
-- **Record alignment**: Commas and braces aligned vertically
-
-### Types & Signatures
-- All top-level functions **must have explicit type signatures** (enforced by `-Wmissing-export-lists`)
-- Export lists are **mandatory** for all modules (enforced by `-Wmissing-export-lists`)
-- Use record syntax with field names for complex data types
-- Prefer point-free style only when clarity is maintained
-- Type constructors: PascalCase (e.g., `Config`, `LogLevel`)
-
-### Naming Conventions
-- **Functions**: camelCase (e.g., `runSettings`, `getTlsManager`)
-- **Data types**: PascalCase (e.g., `CertFile`, `InvalidRequest`)
-- **Type variables**: single lowercase letters (a, b, m) or descriptive like `addr`, `conf`
-- **Module names**: PascalCase with dots (e.g., `Network.HProx.Impl`)
-- **Constants**: camelCase or CAPS_CASE depending on visibility
-
-### Error Handling
-- Exceptions handled via `MonadError` or `Control.Exception`
-- Use typed exceptions where possible (avoid generic `error`)
-- Pattern matching on `Maybe` and `Either` preferred to exception throwing
-- Custom exception types should derive from `Exception` class
-- HTTP errors mapped through `Network.HTTP.Types` status codes
-- Log errors before propagating (use fast-logger infrastructure)
-
-### Records & Data
-- Prefer records over tuples for functions with multiple parameters
-- Use record update syntax: `config { port = 8080 }`
-- Field names as lenses when appropriate (library uses record accessors, not lens library)
-- Use `{..}` pattern matching with `RecordWildCards` enabled
-
-### Module Structure
-- One module per file
-- Module header format (stylish-haskell enforces):
-  ```haskell
-  {-| Documentation comment -}
-  module Network.Module
-    ( exportedFunc
-    , exportedType(..)
-    ) where
-  ```
-- Private helpers listed in `other-modules` of cabal file
-- Keep internal implementation modules in `src/Network/HProx/` subdirectory
-
-### Comments & Documentation
-- Haddock comments for public APIs: `-- | documentation`
-- Implementation comments: `-- regular comment`
-- Use Markdown in Haddock comments for readability
-- Document type fields: `data Config = Config { port :: Int -- ^ Port number }`
-
-## Compiler Warnings
-
-All modules compiled with strict warning flags:
-- `-Wall` - Most warnings
-- `-Wcompat` - Compatibility warnings
-- `-Wincomplete-record-updates` - Incomplete record pattern matches
-- `-Wincomplete-uni-patterns` - Incomplete patterns
-- `-Wmissing-export-lists` - **All modules must have explicit export lists**
-- `-Wmissing-home-modules` - Missing home packages
-- `-Wpartial-fields` - Partial field accessors
-- `-Wredundant-constraints` - Unused type constraints
-
-## Dependencies & Libraries
-
-Key libraries:
-- `wai` - Web application interface (HTTP abstraction)
-- `warp` / `warp-tls` / `warp-quic` - HTTP server implementations
-- `http-types` - HTTP types and utilities
-- `http-client-tls` - HTTP client with TLS
-- `conduit` - Streaming data processing
-- `bytestring` - Efficient byte strings (qualified as BS8)
-- `text` - Unicode text
-- `crypton` - Cryptographic operations
-- `tls` - TLS protocol implementation
-
-## Special Flags
-
-- `quic`: Enable QUIC (HTTP/3) support - adds `http3`, `quic`, `warp-quic` deps and `-DQUIC_ENABLED` CPP flag
-- `static`: Enable static linking - adds `-optl-static` to ghc-options
-- Platform-specific: `!os(windows)` enables Unix module and sets `-DOS_UNIX` CPP flag
-
-## Common Tasks
-
-### Adding a New Module
-1. Create file in `src/Network/HProx/NewModule.hs` with explicit export list
-2. Add to `library.exposed-modules` in package.yaml
-3. Include default extensions and type signatures for all functions
-4. Run `stack build` to verify no warnings
-5. Run `stylish-haskell -i src/Network/HProx/NewModule.hs`
-
-### Running with Options
-```bash
-# View all available options
 stack exec hprox -- --help
-
-# Run on port 8080 with basic auth
-stack exec hprox -- -p 8080 -a userpass.txt
-
-# Run with TLS on port 443
-stack exec hprox -- -p 443 -s example.com:cert.pem:key.pem
+stack exec hprox -- --version
 ```
 
-## References
-- [Hackage Documentation](https://hackage.haskell.org/package/hprox)
-- [GitHub Repository](https://github.com/bjin/hprox)
-- [WAI (Web Application Interface)](https://hackage.haskell.org/package/wai)
+### Formatting
+
+Run `stylish-haskell -i` on the Haskell files you changed. Do not reformat unrelated files.
+
+```bash
+stylish-haskell -i src/Network/HProx.hs test/Network/HProx/RuntimeSpec.hs
+```
+
+## When to run what
+
+- Haskell code change: `stylish-haskell -i <changed .hs files>`, `stack test`, `stack build --pedantic`.
+- Public API, package wiring, executable startup, runtime orchestration: also run `stack build hprox:lib`, `stack build hprox:exe:hprox`, and `stack exec hprox -- --help`.
+- CPP-sensitive code or tests (`QUIC_ENABLED`, `OS_UNIX`, platform modules, config fields): also run both QUIC and no-QUIC builds/tests where relevant.
+- Test/package configuration changes: also run `stack test --pedantic` if the change affects test setup or warning behavior.
+- Documentation-only changes: no build required; state that no tests were run.
+
+## Current architecture
+
+Public facade:
+
+- `Network.HProx` exports the public API: `Config(..)`, `CertFile(..)`, `LogLevel(..)`, `defaultConfig`, `getConfig`, `run`.
+- Keep this API stable unless the user explicitly asks for a breaking change.
+
+Internal modules:
+
+- `Network.HProx.Config`: CLI parser, public `Config`, defaults.
+- `Network.HProx.Auth`: auth-file loading, hashing, rewrite, verifier construction.
+- `Network.HProx.Route`: typed reverse routes and reverse-proxy rewrite helpers.
+- `Network.HProx.Headers`: shared header names, strip policy, protocol value comparison.
+- `Network.HProx.Impl`: WAI middleware and HTTP/CONNECT proxy behavior.
+- `Network.HProx.Runtime`: runtime config normalization, proxy runtime construction, TLS/SNI, Warp settings, runner selection, exception/access logging.
+- `Network.HProx.Platform.Unix`: privilege dropping.
+- `Network.HProx.Platform.Quic`: QUIC + TLS runner wiring.
+- `Network.HProx.DoH`: DNS-over-HTTPS parsing/resolution/response helpers.
+- `Network.HProx.Naive`: naiveproxy padding negotiation and conduit transforms.
+- `Network.HProx.Log`: log levels, typed log output parsing, fast-logger integration.
+- `Network.HProx.Util`: small parsing/password/response helpers.
+
+## Tests
+
+Tests live under `test/Network/HProx/*Spec.hs` and are wired through `test/Spec.hs`. They intentionally include white-box tests against `src` modules; do not expose internals from the library just for tests.
+
+Existing coverage includes:
+
+- CLI/default config parsing.
+- Pure parsing/password/log helpers.
+- Auth-file IO behavior.
+- Middleware endpoints.
+- Reverse-route matching and rewriting.
+- HTTP/CONNECT proxy auth and target selection.
+- TLS/SNI selection.
+- Warp/runtime settings, runner selection, exception filtering.
+- DoH GET/POST behavior and split POST bodies.
+- Naiveproxy padding negotiation and conduit round trips.
+
+When changing behavior, add or update the focused spec first. Prefer testing the small seam that owns the decision rather than a broad network integration.
+
+## Coding rules that matter
+
+- Preserve behavior unless the requested change is explicitly a behavior change.
+- Prefer small domain types and named helpers over tuple-heavy or guard-heavy logic.
+- Avoid partial functions (`fromJust`, `head`, `error`) in production paths. Make invariants explicit with pattern matching or typed failures.
+- Keep effects visible. Do not hide IO behind pure APIs.
+- Use records for multi-field data and construction sites where field order could become fragile.
+- Keep public `Config(..)` shape stable unless explicitly asked otherwise.
+- Use `ByteString` for request/header/proxy data already represented as bytes; avoid unnecessary `String`/`Text` conversions.
+- Use `Maybe`/`Either` for expected parse failures. Throw typed exceptions only at IO boundaries.
+- Keep CPP at module boundaries when practical.
+- Add new internal modules to `package.yaml` under `library.other-modules`.
+
+## Style
+
+- Let `stylish-haskell` decide import layout and alignment.
+- Use explicit export lists for every module.
+- Add top-level type signatures.
+- Qualified imports are preferred when they improve clarity, especially for `ByteString`, `Text`, DNS, TLS, and HTTP modules.
+- Comments should explain protocol constraints or non-obvious behavior preservation, not restate the code.
+
+## CI
+
+CI builds release artifacts and now runs tests after build/install:
+
+- CircleCI: Linux x86_64, Linux aarch64, Windows.
+- Cirrus CI: macOS aarch64.
+
+Keep CI commands aligned with local Stack flags when changing package flags, resolver, or test setup.
+
+## Commit hygiene
+
+- Stage only intended files.
+- Keep commits focused.
+- Prefer `omp commit -c "<CONTEXT>"` when `omp` is available. Use direct `git commit` only when the user explicitly asks for it.
+- For behavior-preserving refactors, mention the tests/builds run and the behavior boundary preserved.
+- For documentation-only commits, state that no tests were run.
