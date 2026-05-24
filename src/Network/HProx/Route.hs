@@ -3,22 +3,41 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Route
-  ( ReverseRoute(..)
+  ( ReverseProxyRewrite(..)
+  , ReverseRoute(..)
+  , findMatchingRoute
   , fromReverseRouteTuple
   , hostMatches
   , prefixMatches
+  , rewriteReverseProxyRequest
   , sortReverseRoutes
   ) where
 
-import Data.ByteString.Char8 qualified as BS8
-import Data.List             (sortOn)
-import Data.Maybe            (isJust)
-import Data.Ord              (Down(..))
+import Data.ByteString.Char8     qualified as BS8
+import Data.CaseInsensitive      qualified as CI
+import Data.List                 (sortOn)
+import Data.Maybe                (isJust, listToMaybe)
+import Data.Ord                  (Down(..))
+import Network.HTTP.Types        (RequestHeaders)
+import Network.HTTP.Types.Header qualified as HT
+
+import Network.HProx.Util
 
 data ReverseRoute = ReverseRoute
   { routeHost     :: !(Maybe BS8.ByteString)
   , routePrefix   :: !BS8.ByteString
   , routeUpstream :: !BS8.ByteString
+  }
+  deriving (Eq, Show)
+
+data ReverseProxyRewrite = ReverseProxyRewrite
+  { rewriteRoute       :: !ReverseRoute
+  , rewriteRawPath     :: !BS8.ByteString
+  , rewriteHeaders     :: !RequestHeaders
+  , rewriteRequestHost :: !(Maybe BS8.ByteString)
+  , rewriteUpstream    :: !BS8.ByteString
+  , rewritePort        :: !Int
+  , rewriteSecure      :: !Bool
   }
   deriving (Eq, Show)
 
@@ -39,3 +58,37 @@ hostMatches ReverseRoute{ routeHost = Just domain } (Just host) = domain == host
 
 prefixMatches :: ReverseRoute -> BS8.ByteString -> Bool
 prefixMatches ReverseRoute{..} rawPath = routePrefix `BS8.isPrefixOf` rawPath
+
+findMatchingRoute :: [ReverseRoute] -> Maybe BS8.ByteString -> BS8.ByteString -> Maybe ReverseRoute
+findMatchingRoute routes requestHost rawPath =
+  listToMaybe $ filter matches $ sortReverseRoutes routes
+  where
+    parsedHost = fmap (fst . parseHostPortWithDefault (error "unused port number")) requestHost
+    matches route = hostMatches route parsedHost && prefixMatches route rawPath
+
+rewriteReverseProxyRequest :: ReverseRoute -> RequestHeaders -> BS8.ByteString -> ReverseProxyRewrite
+rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = ReverseProxyRewrite
+  { rewriteRoute       = route
+  , rewriteRawPath     = BS8.drop (BS8.length routePrefix - 1) rawPath
+  , rewriteHeaders     = (HT.hHost, upstreamHost) : filter keepHeader requestHeaders
+  , rewriteRequestHost = Just upstreamHost
+  , rewriteUpstream    = upstreamHost
+  , rewritePort        = upstreamPort
+  , rewriteSecure      = upstreamPort == 443
+  }
+  where
+    (upstreamHost, upstreamPort) = parseHostPortWithDefault 80 routeUpstream
+
+    keepHeader (name, _) = not (isToStripHeader name) && name /= HT.hHost
+
+isProxyHeader :: HT.HeaderName -> Bool
+isProxyHeader h = "proxy" `BS8.isPrefixOf` CI.foldedCase h
+
+isForwardedHeader :: HT.HeaderName -> Bool
+isForwardedHeader h = "x-forwarded" `BS8.isPrefixOf` CI.foldedCase h
+
+isCDNHeader :: HT.HeaderName -> Bool
+isCDNHeader h = "cf-" `BS8.isPrefixOf` CI.foldedCase h || h == "cdn-loop"
+
+isToStripHeader :: HT.HeaderName -> Bool
+isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"
