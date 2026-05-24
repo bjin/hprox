@@ -47,6 +47,7 @@ library:
   exposed-modules:
   - Network.HProx
   other-modules:
+  - Network.HProx.Auth
   - Network.HProx.Config
   - Network.HProx.DoH
   - Network.HProx.Impl

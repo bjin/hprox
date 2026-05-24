@@ -20,7 +20,6 @@ module Network.HProx
 
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
-import Data.HashMap.Strict         qualified as HM
 import Data.List                   (isSuffixOf, sortOn)
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
@@ -62,11 +61,11 @@ import System.Posix.User
 import Control.Monad
 import Data.Maybe
 
+import Network.HProx.Auth
 import Network.HProx.Config
 import Network.HProx.DoH
 import Network.HProx.Impl
 import Network.HProx.Log
-import Network.HProx.Util
 import Paths_hprox
 
 readCert :: CertFile -> IO TLS.Credential
@@ -223,31 +222,7 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
             (_, defaultCert) : _ -> runTLS (tlsset defaultCert) settings
 #endif
 
-    pauth <- case _auth of
-        Nothing -> return Nothing
-        Just f  -> do
-            logger INFO $ "read username and passwords from " <> toLogStr f
-            userList <- BS8.lines <$> BS8.readFile f
-            let anyPlaintext = any (\line -> length (BS8.elemIndices ':' line) /= 2) userList
-                processUser userpass = case passwordReader userpass of
-                    Nothing           -> do
-                        logger WARN $ "unable to parse line from password file: " <> toLogStr userpass
-                        return Nothing
-                    Just (user, pass) -> do
-                        salted <- hashPasswordWithRandomSalt pass
-                        logger TRACE $ "parsed user (with salted password) from password file: " <> toLogStr (passwordWriter user salted)
-                        return $ Just (user, salted)
-            passwordByUser <- HM.fromList . catMaybes <$> mapM processUser userList
-            when anyPlaintext $ do
-                logger INFO $ "writing back to password file " <> toLogStr f
-                BS8.writeFile f (BS8.unlines [ passwordWriter u p | (u, p) <- HM.toList passwordByUser])
-            let verify line = do
-                    idx <- BS8.elemIndex ':' line
-                    let user = BS8.take idx line
-                        pass = BS8.drop (idx + 1) line
-                    targetPass <- HM.lookup user passwordByUser
-                    return $ verifyPassword targetPass pass
-            return $ Just (\line -> verify line == Just True)
+    pauth <- loadProxyAuth logger _auth
 
     manager <- newTlsManager
 
