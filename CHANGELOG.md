@@ -5,7 +5,7 @@
 
 ### Changed
 - Corrected `extra-source-files` to reference `CHANGELOG.md` and scoped Stack GHC flags to local packages only
-
+- - Replaced partial `head` usage in `parseRequestForPadding` with `listToMaybe` for cleaner extraction of the first valid padding type
 ## 0.6.5
 
 - bump stack dependencies

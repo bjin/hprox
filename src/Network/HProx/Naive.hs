@@ -17,7 +17,7 @@ import Data.ByteString           qualified as BS
 import Data.ByteString.Char8     qualified as BS8
 import Data.ByteString.Lazy      qualified as LBS
 import Data.Conduit.Binary       qualified as CB
-import Data.Maybe                (mapMaybe)
+import Data.Maybe                (listToMaybe, mapMaybe)
 import Network.HTTP.Types.Header qualified as HT
 import System.Random             (uniformR)
 import System.Random.Stateful    (applyAtomicGen, globalStdGen, runStateGen, uniformRM)
@@ -80,8 +80,7 @@ removePaddingConduit Variant1  = removePaddingVariant1 countPaddingsVariant1
 parseRequestForPadding :: Request -> Maybe PaddingType
 parseRequestForPadding req
     | Just paddingTypesStr <- lookup paddingTypeRequestHeader (requestHeaders req) =
-        let paddings = mapMaybe parsePaddingType $ BS8.split ',' paddingTypesStr
-        in if null paddings then Nothing else Just (head paddings)
+        listToMaybe $ mapMaybe parsePaddingType $ BS8.split ',' paddingTypesStr
     | Just _ <- lookup legacyPaddingHeader (requestHeaders req) = Just Variant1
     | otherwise                                                 = Nothing
 
