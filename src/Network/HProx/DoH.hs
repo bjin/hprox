@@ -3,9 +3,11 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
 module Network.HProx.DoH
-  ( createResolver
+  ( DoHRequest(..)
+  , createResolver
   , dnsOverHTTPS
   , dnsOverHTTPSWithLookup
+  , parseDoHRequest
   ) where
 
 import Data.ByteString.Base64.URL qualified as Base64
@@ -19,6 +21,15 @@ import Network.HTTP.Types         qualified as HT
 import Network.Wai
 
 import Network.HProx.Util
+
+data DoHRequest = DoHRequest
+  { dohIdentifier :: !DNS.Identifier
+  , dohQuestion   :: !Question
+  }
+  deriving (Eq, Show)
+
+maxPostBodyLength :: Int
+maxPostBodyLength = 4096
 
 createResolver :: String -> (Resolver -> IO a) -> IO a
 createResolver remote handle = do
@@ -40,29 +51,43 @@ dnsOverHTTPSWithLookup lookupRaw fallback req respond
     | otherwise = fallback req respond
 
 handleDoH :: (Question -> IO (Either DNS.DNSError DNSMessage)) -> Application
-handleDoH lookupRaw req respond
+handleDoH lookupRaw req respond = do
+    dohRequest <- parseDoHRequest req
+    case dohRequest of
+      Nothing -> respond errorResp
+      Just DoHRequest{..} -> do
+        resp <- lookupRaw dohQuestion
+        respond $ case resp of
+          Left _    -> errorResp
+          Right msg -> encodeDoHResponse dohIdentifier msg
+
+parseDoHRequest :: Request -> IO (Maybe DoHRequest)
+parseDoHRequest req
     | requestMethod req == "GET",
-      [("dns", Just dnsStr)] <- queryString req,
-      Right dnsQuery <- Base64.decodeUnpadded dnsStr,
-      Right (DNSMessage { question = [q], header = DNSHeader {..} }) <- DNS.decode dnsQuery =
-        handleQuery identifier q
+      [("dns", Just dnsStr)] <- queryString req =
+        return $ decodeDoHQuery =<< either (const Nothing) Just (Base64.decodeUnpadded dnsStr)
     | requestMethod req == "POST",
       KnownLength len <- requestBodyLength req,
-      len <= 4096 = do
-        dnsQuery <- getRequestBodyChunk req
-        case DNS.decode dnsQuery of
-            Right (DNSMessage { question = [q], header = DNSHeader {..} }) -> handleQuery identifier q
-            _otherwise                                                     -> respond errorResp
-    | otherwise = respond errorResp
-  where
-    errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"
+      len <= fromIntegral maxPostBodyLength =
+        decodeDoHQuery <$> getRequestBodyChunk req
+    | otherwise = return Nothing
 
-    handleQuery ident question' = do
-        resp <- lookupRaw question'
-        respond $ case resp of
-            Left _ -> errorResp
-            Right dnsResp@DNSMessage{header = header} ->
-                let encoded = DNS.encode (dnsResp {header = header {identifier = ident} }) in
-                    responseKnownLength HT.status200
-                        [("Content-Type", "application/dns-message")]
-                        (LBS.fromStrict encoded)
+decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
+decodeDoHQuery dnsQuery =
+    case DNS.decode dnsQuery of
+      Right (DNSMessage { question = [q], header = DNSHeader {..} }) ->
+        Just DoHRequest
+          { dohIdentifier = identifier
+          , dohQuestion = q
+          }
+      _otherwise -> Nothing
+
+encodeDoHResponse :: DNS.Identifier -> DNSMessage -> Response
+encodeDoHResponse ident dnsResp@DNSMessage{header = header} =
+    let encoded = DNS.encode (dnsResp {header = header {identifier = ident} })
+    in responseKnownLength HT.status200
+         [("Content-Type", "application/dns-message")]
+         (LBS.fromStrict encoded)
+
+errorResp :: Response
+errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"
