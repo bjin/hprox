@@ -1,13 +1,22 @@
 ## Unreleased
 
 ### Added
-- Added a minimal `hprox-test` Hspec smoke suite target and `test/Spec.hs` entrypoint to the package test configuration
-- Added characterization tests for pure helper functions (`parseHostPort`, `parseHostPortWithDefault`, `passwordReader`, `passwordWriter`, `logLevelReader`, `splitBy`) in `hprox-test` via new `Network.HProx.PureSpec`
+- Added an Hspec-based `hprox-test` suite with characterization coverage for CLI/default parsing, pure helpers, auth-file loading and rewriting, middleware endpoints, reverse-proxy routing and rewrites, HTTP/CONNECT proxy decisions, TLS/SNI selection, Warp/runtime exception handling, runner selection, DoH behavior, and naiveproxy padding.
+- Added internal domain/runtime seams for `Config`, auth loading, reverse routes, proxy runtime construction, TLS/SNI setup, Warp settings, runner selection, platform-specific Unix/QUIC startup, log output parsing, header policy, DoH requests, and runtime configuration.
 
 ### Changed
-- Corrected `extra-source-files` to reference `CHANGELOG.md` and scoped Stack GHC flags to local packages only
-- - Replaced partial `head` usage in `parseRequestForPadding` with `listToMaybe` for cleaner extraction of the first valid padding type
-- Extended `hprox-test` configuration to compile `src` modules directly so pure-unit specs can access internal helpers without changing the public API
+- Refactored `Network.HProx.run` into focused internal modules while preserving the public `Network.HProx` API and existing runtime behavior.
+- Replaced tuple-heavy reverse-proxy internals with typed `ReverseRoute` and request rewrite helpers.
+- Made proxy logging effects explicit by removing the hidden `unsafePerformIO` logging path.
+- Centralized current header constants and strip/lookup policy, then made protocol header value comparisons case-insensitive for `X-Forwarded-Proto` and `X-Scheme`.
+- Refactored DoH handling into explicit parse/resolve/respond helpers and made POST body reading support split request chunks within the existing 4096-byte limit.
+- Named naiveproxy padding protocol constants and added deterministic parser/round-trip coverage.
+
+### Fixed
+- Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.
+- Hardened malformed HTTP proxy target parsing to reject malformed explicit ports and HTTP/2 proxy requests without a Host header while preserving bracketed IPv6 authorities.
+- Replaced the Argon2 password-hash `error` path with a typed `PasswordHashError` thrown at the IO boundary.
+
 ## 0.6.5
 
 - bump stack dependencies
