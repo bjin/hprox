@@ -20,6 +20,9 @@ import System.IO.Error             (mkIOError)
 import Network.HProx.Platform.Quic
 import Network.QUIC.Internal       qualified as Q
 #endif
+#ifdef OS_UNIX
+import Network.HProx.Platform.Unix
+#endif
 
 import Network.HProx.Config
 import Network.HProx.Log
@@ -101,6 +104,48 @@ spec = do
       quicAddressPlan Nothing 8443 `shouldBe` [("0.0.0.0", 8443), ("::", 8443)]
       quicAddressPlan (Just "127.0.0.1") 8443 `shouldBe` [("127.0.0.1", 8443)]
       quicAltSvc 8443 `shouldBe` "h3=\":8443\""
+#endif
+#ifdef OS_UNIX
+  describe "privilege drop planning" $ do
+    it "uses the target user's primary group when no group is configured" $ do
+      let userEntry = ResolvedUser "alice" 1001 2001
+          groups =
+            [ ResolvedGroup "primary" 2001 []
+            , ResolvedGroup "extra" 2002 ["alice"]
+            , ResolvedGroup "other" 2003 ["bob"]
+            ]
+      planPrivilegeDrop (Just userEntry) Nothing groups
+        `shouldBe` PrivilegeDropPlan
+          { privilegeDropUserName = Just "alice"
+          , privilegeDropUserID = Just 1001
+          , privilegeDropGroupName = Nothing
+          , privilegeDropGroupID = Just 2001
+          , privilegeDropSupplementaryGroups = [2001, 2002]
+          }
+
+    it "uses an explicit primary group for a target user" $ do
+      let userEntry = ResolvedUser "alice" 1001 2001
+          groupEntry = ResolvedGroup "service" 3001 []
+          groups = [ResolvedGroup "extra" 2002 ["alice"]]
+      planPrivilegeDrop (Just userEntry) (Just groupEntry) groups
+        `shouldBe` PrivilegeDropPlan
+          { privilegeDropUserName = Just "alice"
+          , privilegeDropUserID = Just 1001
+          , privilegeDropGroupName = Just "service"
+          , privilegeDropGroupID = Just 3001
+          , privilegeDropSupplementaryGroups = [3001, 2002]
+          }
+
+    it "clears supplementary groups for group-only drops" $ do
+      let groupEntry = ResolvedGroup "service" 3001 ["alice"]
+      planPrivilegeDrop Nothing (Just groupEntry) [groupEntry]
+        `shouldBe` PrivilegeDropPlan
+          { privilegeDropUserName = Nothing
+          , privilegeDropUserID = Nothing
+          , privilegeDropGroupName = Just "service"
+          , privilegeDropGroupID = Just 3001
+          , privilegeDropSupplementaryGroups = []
+          }
 #endif
 
   describe "DoH wrapping decision" $ do
