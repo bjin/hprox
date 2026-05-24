@@ -8,8 +8,10 @@ module Network.HProx.DoH
   , dnsOverHTTPS
   , dnsOverHTTPSWithLookup
   , parseDoHRequest
+  , parseDoHRequestWithBodyReader
   ) where
 
+import Data.ByteString            qualified as BS
 import Data.ByteString.Base64.URL qualified as Base64
 import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
@@ -62,15 +64,32 @@ handleDoH lookupRaw req respond = do
           Right msg -> encodeDoHResponse dohIdentifier msg
 
 parseDoHRequest :: Request -> IO (Maybe DoHRequest)
-parseDoHRequest req
+parseDoHRequest req = parseDoHRequestWithBodyReader (getRequestBodyChunk req) req
+
+parseDoHRequestWithBodyReader :: IO BS.ByteString -> Request -> IO (Maybe DoHRequest)
+parseDoHRequestWithBodyReader readChunk req
     | requestMethod req == "GET",
       [("dns", Just dnsStr)] <- queryString req =
         return $ decodeDoHQuery =<< either (const Nothing) Just (Base64.decodeUnpadded dnsStr)
     | requestMethod req == "POST",
       KnownLength len <- requestBodyLength req,
       len <= fromIntegral maxPostBodyLength =
-        decodeDoHQuery <$> getRequestBodyChunk req
+        decodeDoHQuery <$> readRequestBody readChunk (fromIntegral len)
     | otherwise = return Nothing
+
+readRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
+readRequestBody readChunk expectedLength = go expectedLength []
+  where
+    go remaining chunks
+      | remaining <= 0 = return $ BS.concat $ reverse chunks
+      | otherwise = do
+          chunk <- readChunk
+          if BS.null chunk
+            then return $ BS.concat $ reverse chunks
+            else do
+              let (accepted, _extra) = BS.splitAt remaining chunk
+                  nextRemaining = remaining - BS.length accepted
+              go nextRemaining (accepted : chunks)
 
 decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
 decodeDoHQuery dnsQuery =

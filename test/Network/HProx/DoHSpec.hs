@@ -7,6 +7,7 @@ module Network.HProx.DoHSpec
 import Data.ByteString            qualified as BS
 import Data.ByteString.Base64.URL qualified as Base64
 import Data.ByteString.Lazy       qualified as LBS
+import Data.IORef                 (IORef, newIORef, readIORef, writeIORef)
 import Network.DNS                qualified as DNS
 import Network.HTTP.Types         qualified as HT
 import Network.Wai
@@ -42,6 +43,14 @@ spec =
       simpleStatus response `shouldBe` HT.status400
       simpleBody response `shouldBe` "invalid dns-over-https request"
 
+    it "parses valid POST bodies split across multiple chunks" $ do
+      chunks <- newIORef [BS.take 5 encodedQuery, BS.drop 5 encodedQuery]
+      parsed <- parseDoHRequestWithBodyReader (popChunk chunks) postDnsRequest
+      parsed `shouldBe` Just DoHRequest
+        { dohIdentifier = requestIdentifier
+        , dohQuestion = decodedQuestion
+        }
+
     it "falls through outside secure /dns-query requests" $ do
       insecureResponse <- runDoHRequest getDnsRequest { isSecure = False }
       otherPathResponse <- runDoHRequest getDnsRequest { pathInfo = ["other"], rawPathInfo = "/other" }
@@ -59,6 +68,15 @@ runDoHRequest req = runDoHRequestWithBody req requestBody
 
 runDoHRequestWithBody :: Request -> LBS.ByteString -> IO SResponse
 runDoHRequestWithBody req body = runSession (srequest $ SRequest req body) testApplication
+
+popChunk :: IORef [BS.ByteString] -> IO BS.ByteString
+popChunk chunksRef = do
+  chunks <- readIORef chunksRef
+  case chunks of
+    [] -> return ""
+    chunk : rest -> do
+      writeIORef chunksRef rest
+      return chunk
 
 testApplication :: Application
 testApplication = dnsOverHTTPSWithLookup lookupResponse fallback
@@ -110,6 +128,9 @@ question = DNS.Question
   { DNS.qname = "example.com"
   , DNS.qtype = DNS.A
   }
+
+decodedQuestion :: DNS.Question
+decodedQuestion = question { DNS.qname = "example.com." }
 
 requestIdentifier :: DNS.Identifier
 requestIdentifier = 0x1234
