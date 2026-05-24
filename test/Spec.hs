@@ -8,6 +8,7 @@ import Network.HProx.AuthSpec       qualified as AuthSpec
 import Network.HProx.ConfigSpec     qualified as ConfigSpec
 import Network.HProx.MiddlewareSpec qualified as MiddlewareSpec
 import Network.HProx.PureSpec       qualified as PureSpec
+import Network.HProx.RouteSpec      qualified as RouteSpec
 import Test.Hspec
 
 
@@ -20,3 +21,4 @@ main = hspec $ do
   ConfigSpec.spec
   PureSpec.spec
   MiddlewareSpec.spec
+  RouteSpec.spec

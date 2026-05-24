@@ -53,6 +53,7 @@ library:
   - Network.HProx.Impl
   - Network.HProx.Log
   - Network.HProx.Naive
+  - Network.HProx.Route
   - Network.HProx.Util
   - Paths_hprox
   dependencies:
