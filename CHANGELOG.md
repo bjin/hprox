@@ -11,6 +11,7 @@
 - Centralized current header constants and strip/lookup policy, then made protocol header value comparisons case-insensitive for `X-Forwarded-Proto` and `X-Scheme`.
 - Refactored DoH handling into explicit parse/resolve/respond helpers and made POST body reading support split request chunks within the existing 4096-byte limit.
 - Named naiveproxy padding protocol constants and added deterministic parser/round-trip coverage.
+- Updated copyright notices to 2026 in LICENSE, package metadata, and all touched source/test headers
 
 ### Fixed
 - Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.

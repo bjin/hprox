@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: Apache-2.0
-
--- Copyright (C) 2023 Bin Jin. All Rights Reserved.
+--
+-- Copyright (C) 2026 Bin Jin. All Rights Reserved.
 
 module Network.HProx.Auth
   ( loadProxyAuth

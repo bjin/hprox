@@ -1,4 +1,6 @@
 -- SPDX-License-Identifier: Apache-2.0
+--
+-- Copyright (C) 2026 Bin Jin. All Rights Reserved.
 {-# LANGUAGE CPP #-}
 
 module Network.HProx.ConfigSpec
