@@ -9,6 +9,7 @@ import Network.HProx.ConfigSpec     qualified as ConfigSpec
 import Network.HProx.DoHSpec        qualified as DoHSpec
 import Network.HProx.HeadersSpec    qualified as HeadersSpec
 import Network.HProx.MiddlewareSpec qualified as MiddlewareSpec
+import Network.HProx.NaiveSpec      qualified as NaiveSpec
 import Network.HProx.ProxySpec      qualified as ProxySpec
 import Network.HProx.PureSpec       qualified as PureSpec
 import Network.HProx.RouteSpec      qualified as RouteSpec
@@ -28,6 +29,7 @@ main = hspec $ do
   PureSpec.spec
   HeadersSpec.spec
   MiddlewareSpec.spec
+  NaiveSpec.spec
   RouteSpec.spec
   ProxySpec.spec
   TLSSpec.spec

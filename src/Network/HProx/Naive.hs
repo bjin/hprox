@@ -25,6 +25,15 @@ import System.Random.Stateful    (applyAtomicGen, globalStdGen, runStateGen, uni
 import Data.Conduit
 import Network.Wai
 
+randomPaddingMinLength :: Int
+randomPaddingMinLength = 32
+
+randomPaddingMaxLength :: Int
+randomPaddingMaxLength = 63
+
+randomPaddingPrefixLength :: Int
+randomPaddingPrefixLength = 24
+
 randomPadding :: IO BS8.ByteString
 randomPadding = applyAtomicGen generate globalStdGen
   where
@@ -32,11 +41,11 @@ randomPadding = applyAtomicGen generate globalStdGen
     countNonHuffman = length nonHuffman
 
     generate g0 = runStateGen g0 $ \gen -> do
-        len <- uniformRM (32, 63) gen
-        prefix <- replicateM 24 $ do
+        len <- uniformRM (randomPaddingMinLength, randomPaddingMaxLength) gen
+        prefix <- replicateM randomPaddingPrefixLength $ do
             idx <- uniformRM (0, countNonHuffman - 1) gen
             return $ nonHuffman !! idx
-        return (BS8.pack (prefix ++ replicate (len - 24) '~'))
+        return (BS8.pack (prefix ++ replicate (len - randomPaddingPrefixLength) '~'))
 
 randInt :: Int -> Int -> IO Int
 randInt minv maxv = applyAtomicGen (uniformR (minv, maxv)) globalStdGen
@@ -94,6 +103,33 @@ prepareResponseForPadding (Just paddingType) = do
 countPaddingsVariant1 :: Int
 countPaddingsVariant1 = 8
 
+variant1HeaderLength :: Int
+variant1HeaderLength = 3
+
+variant1MaxPaddingLength :: Int
+variant1MaxPaddingLength = 255
+
+variant1MaxFrameLength :: Int
+variant1MaxFrameLength = 65535
+
+variant1MaxPayloadLength :: Int
+variant1MaxPayloadLength = variant1MaxFrameLength - variant1HeaderLength - variant1MaxPaddingLength
+
+variant1SmallPayloadThreshold :: Int
+variant1SmallPayloadThreshold = 400
+
+variant1LargePayloadThreshold :: Int
+variant1LargePayloadThreshold = 1024
+
+variant1SplitMinLength :: Int
+variant1SplitMinLength = 200
+
+variant1SplitMaxLength :: Int
+variant1SplitMaxLength = 300
+
+variant1MinFullPaddingLength :: Int
+variant1MinFullPaddingLength = 100
+
 addPaddingVariant1 :: Int -> PaddingConduit
 addPaddingVariant1 0 = noPaddingConduit
 addPaddingVariant1 n = do
@@ -102,15 +138,15 @@ addPaddingVariant1 n = do
         Nothing -> return ()
         Just bs | BS.null bs -> return ()
         Just bs -> do
-            let remaining = min (BS.length bs) (65535 - 3 - 255)
-            toConsume <- if remaining > 400 && remaining < 1024
-                         then liftIO $ randInt 200 300
+            let remaining = min (BS.length bs) variant1MaxPayloadLength
+            toConsume <- if remaining > variant1SmallPayloadThreshold && remaining < variant1LargePayloadThreshold
+                         then liftIO $ randInt variant1SplitMinLength variant1SplitMaxLength
                          else return remaining
             let (bs0, bs1) = BS.splitAt toConsume bs
             unless (BS.null bs1) $ leftover bs1
             let len = BS.length bs0
-                minPaddingLen = if len < 100 then 255 - len else 1
-            paddingLen <- liftIO $ randInt minPaddingLen 255
+                minPaddingLen = if len < variant1MinFullPaddingLength then variant1MaxPaddingLength - len else 1
+            paddingLen <- liftIO $ randInt minPaddingLen variant1MaxPaddingLength
             let header = mconcat (map (BB.singleton.fromIntegral) [len `div` 256, len `mod` 256, paddingLen])
                 body   = BB.fromByteString bs0
                 tailer = BB.fromByteString (BS.replicate paddingLen 0)
