@@ -38,6 +38,7 @@
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
 - Prevented auth-file logging from leaking password-like fragments by replacing raw-line diagnostics with non-sensitive context
+- Hardened SNI matching to use ASCII case-insensitive host checks and reject invalid wildcard matches
 ## 0.6.5
 
 - bump stack dependencies

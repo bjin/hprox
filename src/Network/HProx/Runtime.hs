@@ -35,7 +35,7 @@ module Network.HProx.Runtime
 import Control.Exception           (SomeException, displayException, fromException)
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
-import Data.List                   (isSuffixOf, sortOn)
+import Data.List                   (sortOn)
 import Data.Maybe                  (fromMaybe, isJust, isNothing)
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
@@ -298,6 +298,7 @@ lookupSNICredentials host certs =
 defaultCertificate :: [(String, a)] -> Maybe a
 defaultCertificate []              = Nothing
 defaultCertificate ((_, cert) : _) = Just cert
+
 lookupSNIHost :: Maybe String -> [(String, a)] -> Either String a
 lookupSNIHost Nothing _ = Left "SNI: unspecified"
 lookupSNIHost (Just host) certs = go certs
@@ -308,6 +309,18 @@ lookupSNIHost (Just host) certs = go certs
       | otherwise                      = go rest
 
 sniPatternMatches :: String -> String -> Bool
-sniPatternMatches host pattern = case pattern of
-  '*' : '.' : suffix -> ('.' : suffix) `isSuffixOf` host
-  exact              -> host == exact
+sniPatternMatches host pattern = case map asciiLower pattern of
+  '*' : '.' : suffix -> singleLabelWildcardMatches (map asciiLower host) suffix
+  exact              -> map asciiLower host == exact
+
+singleLabelWildcardMatches :: String -> String -> Bool
+singleLabelWildcardMatches host suffix =
+  case break (== '.') host of
+    ([], _)             -> False
+    (label, '.' : rest) -> not (null label) && rest == suffix
+    _                   -> False
+
+asciiLower :: Char -> Char
+asciiLower char
+  | char >= 'A' && char <= 'Z' = toEnum (fromEnum char + 32)
+  | otherwise = char
