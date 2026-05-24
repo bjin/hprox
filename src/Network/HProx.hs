@@ -41,7 +41,9 @@ import Paths_hprox
 run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
-run fallback conf@Config{..} = withLogger (logOutputType (parseLogOutput _log)) _loglevel $ \logger -> do
+run fallback conf@Config{..} =
+  let runtimeConfig = buildRuntimeConfig conf
+  in withLogger (logOutputType (runtimeConfigLogOutput runtimeConfig)) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
     allCerts <- loadTlsCredentials _ssl
@@ -79,7 +81,7 @@ run fallback conf@Config{..} = withLogger (logOutputType (parseLogOutput _log)) 
 
     manager <- newTlsManager
 
-    let proxyRuntime = buildProxyRuntime conf logger pauth isSSL
+    let proxyRuntime = buildProxyRuntime runtimeConfig conf logger pauth isSSL
         pset = runtimeProxySettings proxyRuntime
         revSorted = runtimeReverseRoutes proxyRuntime
         proxy = buildProxyApplication isSSL pset manager fallback

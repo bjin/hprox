@@ -8,10 +8,12 @@
 module Network.HProx.Runtime
   ( ProxyRuntime(..)
   , RunnerPlan(..)
+  , RuntimeConfig(..)
   , StartupStep(..)
   , WarpRuntimePlan(..)
   , buildProxyApplication
   , buildProxyRuntime
+  , buildRuntimeConfig
   , buildTlsSettings
   , buildWarpRuntimePlan
   , buildWarpSettings
@@ -62,6 +64,13 @@ import Network.HProx.Impl
 import Network.HProx.Log
 import Network.HProx.Route
 
+data RuntimeConfig = RuntimeConfig
+  { runtimeConfigLogOutput          :: !LogOutput
+  , runtimeConfigReverseRoutes      :: ![ReverseRoute]
+  , runtimeConfigReverseRouteTuples :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
+  }
+  deriving (Eq, Show)
+
 data ProxyRuntime = ProxyRuntime
   { runtimeProxySettings :: !ProxySettings
   , runtimeReverseRoutes :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
@@ -93,22 +102,29 @@ data StartupStep
   | StartRunner
   deriving (Eq, Show)
 
-buildProxyRuntime :: Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxyRuntime
-buildProxyRuntime Config{..} logger pauth isSSL = ProxyRuntime
+buildRuntimeConfig :: Config -> RuntimeConfig
+buildRuntimeConfig Config{..} = RuntimeConfig
+  { runtimeConfigLogOutput = parseLogOutput _log
+  , runtimeConfigReverseRoutes = map fromReverseRouteTuple revSorted
+  , runtimeConfigReverseRouteTuples = revSorted
+  }
+  where
+    revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
+
+buildProxyRuntime :: RuntimeConfig -> Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxyRuntime
+buildProxyRuntime RuntimeConfig{..} Config{..} logger pauth isSSL = ProxyRuntime
   { runtimeProxySettings = ProxySettings
       { proxyAuth      = pauth
       , passPrompt     = Just _name
       , wsRemote       = _ws
-      , revRemoteMap   = map fromReverseRouteTuple revSorted
+      , revRemoteMap   = runtimeConfigReverseRoutes
       , hideProxyAuth  = _hide
       , naivePadding   = _naive && isSSL
       , acmeThumbprint = _acme
       , logger         = logger
       }
-  , runtimeReverseRoutes = revSorted
+  , runtimeReverseRoutes = runtimeConfigReverseRouteTuples
   }
-  where
-    revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
 
 buildProxyApplication :: Bool -> ProxySettings -> HC.Manager -> Application -> Application
 buildProxyApplication isSSL pset manager fallback =

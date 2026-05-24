@@ -20,12 +20,32 @@ import Network.QUIC.Internal qualified as Q
 
 import Network.HProx.Config
 import Network.HProx.Log
+import Network.HProx.Route
 import Network.HProx.Runtime
 
 import Test.Hspec
 
 spec :: Spec
 spec = do
+  describe "RuntimeConfig" $
+    it "normalizes log output and sorted reverse routes at the runtime boundary" $
+      buildRuntimeConfig defaultConfig
+        { _log = "stderr"
+        , _rev =
+            [ (Nothing, "/", "catch:80")
+            , (Just "example.com", "/api/", "api:443")
+            ]
+        } `shouldBe` RuntimeConfig
+          { runtimeConfigLogOutput = LogOutputStderr
+          , runtimeConfigReverseRoutes =
+              [ ReverseRoute (Just "example.com") "/api/" "api:443"
+              , ReverseRoute Nothing "/" "catch:80"
+              ]
+          , runtimeConfigReverseRouteTuples =
+              [ (Just "example.com", "/api/", "api:443")
+              , (Nothing, "/", "catch:80")
+              ]
+          }
   describe "Warp runtime settings" $ do
     it "captures default bind, port, server name, and no-parse-path settings" $
       buildWarpRuntimePlan defaultConfig `shouldBe` WarpRuntimePlan
