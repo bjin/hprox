@@ -63,8 +63,11 @@ findMatchingRoute :: [ReverseRoute] -> Maybe BS8.ByteString -> BS8.ByteString ->
 findMatchingRoute routes requestHost rawPath =
   listToMaybe $ filter matches $ sortReverseRoutes routes
   where
-    parsedHost = fmap (fst . parseHostPortWithDefault (error "unused port number")) requestHost
+    parsedHost = fmap hostOnly requestHost
     matches route = hostMatches route parsedHost && prefixMatches route rawPath
+
+hostOnly :: BS8.ByteString -> BS8.ByteString
+hostOnly host = maybe host fst (parseHostPort host)
 
 rewriteReverseProxyRequest :: ReverseRoute -> RequestHeaders -> BS8.ByteString -> ReverseProxyRewrite
 rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = ReverseProxyRewrite
