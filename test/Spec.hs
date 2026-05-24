@@ -4,9 +4,10 @@ module Main
   ( main
   ) where
 
-import Network.HProx.AuthSpec   qualified as AuthSpec
-import Network.HProx.ConfigSpec qualified as ConfigSpec
-import Network.HProx.PureSpec   qualified as PureSpec
+import Network.HProx.AuthSpec       qualified as AuthSpec
+import Network.HProx.ConfigSpec     qualified as ConfigSpec
+import Network.HProx.MiddlewareSpec qualified as MiddlewareSpec
+import Network.HProx.PureSpec       qualified as PureSpec
 import Test.Hspec
 
 
@@ -18,3 +19,4 @@ main = hspec $ do
   AuthSpec.spec
   ConfigSpec.spec
   PureSpec.spec
+  MiddlewareSpec.spec
