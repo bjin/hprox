@@ -4,8 +4,10 @@
 
 module Network.HProx.Util
   ( Password(..)
+  , PasswordHashError(..)
   , PasswordSalted(..)
   , hashPasswordWithRandomSalt
+  , hashPasswordWithSalt
   , parseHostPort
   , parseHostPortWithDefault
   , passwordReader
@@ -15,6 +17,7 @@ module Network.HProx.Util
   , verifyPassword
   ) where
 
+import Control.Exception     (Exception, throwIO)
 import Data.ByteString       qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy  qualified as LBS
@@ -33,6 +36,11 @@ import Data.ByteString.Base64 qualified as Base64
 data Password = PlainText !BS.ByteString
               | Salted !BS.ByteString !BS.ByteString
     deriving (Show, Eq)
+
+data PasswordHashError = PasswordHashError !String
+  deriving (Show, Eq)
+
+instance Exception PasswordHashError
 
 data PasswordSalted = PasswordSalted !BS.ByteString !BS.ByteString
     deriving (Show, Eq)
@@ -55,13 +63,19 @@ passwordWriter :: BS.ByteString -> PasswordSalted -> BS.ByteString
 passwordWriter user (PasswordSalted salt hash) =
     BS.concat [user , ":" , Base64.encode salt , ":" , Base64.encode hash]
 
-hashPasswordWithRandomSalt :: Password -> IO PasswordSalted
-hashPasswordWithRandomSalt (PlainText pass) = do
-    salt <- getRandomBytes 24
+hashPasswordWithSalt :: BS.ByteString -> Password -> Either PasswordHashError PasswordSalted
+hashPasswordWithSalt salt (PlainText pass) =
     case Argon2.hash Argon2.defaultOptions pass salt 48 of
-        CryptoFailed err -> error ("unable to hash password with salt: " ++ show err)
-        CryptoPassed h   -> return (PasswordSalted salt h)
-hashPasswordWithRandomSalt (Salted salt h) = return (PasswordSalted salt h)
+        CryptoFailed err -> Left (PasswordHashError $ "unable to hash password with salt: " ++ show err)
+        CryptoPassed h   -> Right (PasswordSalted salt h)
+hashPasswordWithSalt _ (Salted salt h) = Right (PasswordSalted salt h)
+
+hashPasswordWithRandomSalt :: Password -> IO PasswordSalted
+hashPasswordWithRandomSalt password@(PlainText _) = do
+    salt <- getRandomBytes 24
+    either throwIO return (hashPasswordWithSalt salt password)
+hashPasswordWithRandomSalt password@(Salted _ _) =
+    either throwIO return (hashPasswordWithSalt "" password)
 
 verifyPassword :: PasswordSalted -> BS8.ByteString -> Bool
 verifyPassword (PasswordSalted salt hashed) pass =

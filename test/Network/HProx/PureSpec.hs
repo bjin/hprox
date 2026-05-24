@@ -49,6 +49,15 @@ spec = do
     it "writes salted password lines with base64 salt and hash" $
       passwordWriter "user" (PasswordSalted "salt" "hash") `shouldBe` "user:c2FsdA==:aGFzaA=="
 
+  describe "hashPasswordWithSalt" $ do
+    it "returns a typed failure when Argon2 rejects hashing parameters" $
+      case hashPasswordWithSalt "" (PlainText "pass") of
+        Left (PasswordHashError msg) -> msg `shouldContain` "unable to hash password with salt"
+        Right _                      -> expectationFailure "expected typed hash failure"
+
+    it "keeps already salted passwords without rehashing" $
+      hashPasswordWithSalt "" (Salted "salt" "hash") `shouldBe` Right (PasswordSalted "salt" "hash")
+
   describe "logLevelReader" $ do
     it "parses all current log levels" $
       map logLevelReader ["trace", "debug", "info", "warn", "error", "none"]
