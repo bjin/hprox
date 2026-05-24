@@ -29,6 +29,13 @@ jobs:
                 --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
+          name: Test
+          command: |
+            ./stack \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
+                --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
+                test --flag hprox:static --flag hprox:quic $GHC_OPTIONS
+      - run:
           name: Package executable
           command: |
             mkdir ~/release
@@ -74,6 +81,13 @@ jobs:
                 --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
                 --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
+      - run:
+          name: Test
+          command: |
+            ./stack \
+                --no-terminal --no-interleaved-output --system-ghc --no-install-ghc \
+                --docker --docker-repo stack-builder:latest --docker-stack-exe image --no-docker-auto-pull \
+                test --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
           command: |
@@ -124,6 +138,12 @@ jobs:
             ./stack.exe --skip-msys --ghc-variant int-native \
                 --no-terminal --no-interleaved-output \
                 install --flag hprox:static --flag hprox:quic $GHC_OPTIONS
+      - run:
+          name: Test
+          command: |
+            ./stack.exe --skip-msys --ghc-variant int-native \
+                --no-terminal --no-interleaved-output \
+                test --flag hprox:static --flag hprox:quic $GHC_OPTIONS
       - run:
           name: Package executable
           command: |
