@@ -5,6 +5,7 @@
 module Network.HProx.DoH
   ( createResolver
   , dnsOverHTTPS
+  , dnsOverHTTPSWithLookup
   ) where
 
 import Data.ByteString.Base64.URL qualified as Base64
@@ -30,12 +31,16 @@ createResolver remote handle = do
     conf = DNS.defaultResolvConf { resolvInfo = info }
 
 dnsOverHTTPS :: Resolver -> Middleware
-dnsOverHTTPS resolver fallback req respond
-    | pathInfo req == ["dns-query"] && isSecure req = handleDoH resolver req respond
+dnsOverHTTPS resolver =
+    dnsOverHTTPSWithLookup $ \Question{..} -> DNS.lookupRaw resolver qname qtype
+
+dnsOverHTTPSWithLookup :: (Question -> IO (Either DNS.DNSError DNSMessage)) -> Middleware
+dnsOverHTTPSWithLookup lookupRaw fallback req respond
+    | pathInfo req == ["dns-query"] && isSecure req = handleDoH lookupRaw req respond
     | otherwise = fallback req respond
 
-handleDoH :: Resolver -> Application
-handleDoH resolver req respond
+handleDoH :: (Question -> IO (Either DNS.DNSError DNSMessage)) -> Application
+handleDoH lookupRaw req respond
     | requestMethod req == "GET",
       [("dns", Just dnsStr)] <- queryString req,
       Right dnsQuery <- Base64.decodeUnpadded dnsStr,
@@ -52,8 +57,8 @@ handleDoH resolver req respond
   where
     errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"
 
-    handleQuery ident Question{..} = do
-        resp <- DNS.lookupRaw resolver qname qtype
+    handleQuery ident question' = do
+        resp <- lookupRaw question'
         respond $ case resp of
             Left _ -> errorResp
             Right dnsResp@DNSMessage{header = header} ->
