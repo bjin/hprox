@@ -45,6 +45,7 @@ import Data.Maybe
 import Network.Wai
 import Network.Wai.Middleware.StripHeaders
 
+import Network.HProx.Headers
 import Network.HProx.Log
 import Network.HProx.Naive
 import Network.HProx.Route
@@ -100,17 +101,6 @@ redirectToSSL req respond
         [("Upgrade", "TLS/1.0, HTTP/1.1"), ("Connection", "Upgrade")]
         ""
 
-isProxyHeader :: HT.HeaderName -> Bool
-isProxyHeader h = "proxy" `BS.isPrefixOf` CI.foldedCase h
-
-isForwardedHeader :: HT.HeaderName -> Bool
-isForwardedHeader h = "x-forwarded" `BS.isPrefixOf` CI.foldedCase h
-
-isCDNHeader :: HT.HeaderName -> Bool
-isCDNHeader h = "cf-" `BS.isPrefixOf` CI.foldedCase h || h == "cdn-loop"
-
-isToStripHeader :: HT.HeaderName -> Bool
-isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"
 
 checkAuth :: ProxySettings -> Request -> IO Bool
 checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
@@ -160,8 +150,8 @@ acmeProvider ProxySettings{..} app req respond
 pacProvider :: Middleware
 pacProvider fallback req respond
     | pathInfo req == [".hprox", "config.pac"],
-      Just host' <- lookup "x-forwarded-host" (requestHeaders req) <|> requestHeaderHost req =
-        let issecure = case lookup "x-forwarded-proto" (requestHeaders req) of
+      Just host' <- lookup forwardedHostHeader (requestHeaders req) <|> requestHeaderHost req =
+        let issecure = case lookup forwardedProtoHeader (requestHeaders req) of
                 Just proto -> proto == "https"
                 Nothing    -> isSecure req
             scheme = if issecure then "HTTPS" else "PROXY"
@@ -236,7 +226,7 @@ selectHttpProxyTarget req
 
     isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
     hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
-    scheme = lookup "X-Scheme" (requestHeaders req)
+    scheme = lookup xSchemeHeader (requestHeaders req)
     isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
 
     (hostPortP, newRawPathP) = BS8.span (/='/') $
@@ -284,7 +274,7 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
 
         proxiedRequest newRawPath = req
           { rawPathInfo = newRawPath
-          , requestHeaders = filter (not.isToStripHeader.fst) $ requestHeaders req
+          , requestHeaders = filter (not.isProxyStripHeader.fst) $ requestHeaders req
           }
 
 httpConnectProxy :: ProxySettings -> Middleware

@@ -50,6 +50,7 @@ library:
   - Network.HProx.Auth
   - Network.HProx.Config
   - Network.HProx.DoH
+  - Network.HProx.Headers
   - Network.HProx.Impl
   - Network.HProx.Log
   - Network.HProx.Naive

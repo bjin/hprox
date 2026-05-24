@@ -14,13 +14,13 @@ module Network.HProx.Route
   ) where
 
 import Data.ByteString.Char8     qualified as BS8
-import Data.CaseInsensitive      qualified as CI
 import Data.List                 (sortOn)
 import Data.Maybe                (isJust, listToMaybe)
 import Data.Ord                  (Down(..))
 import Network.HTTP.Types        (RequestHeaders)
 import Network.HTTP.Types.Header qualified as HT
 
+import Network.HProx.Headers
 import Network.HProx.Util
 
 data ReverseRoute = ReverseRoute
@@ -82,16 +82,5 @@ rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = Rever
   where
     (upstreamHost, upstreamPort) = parseHostPortWithDefault 80 routeUpstream
 
-    keepHeader (name, _) = not (isToStripHeader name) && name /= HT.hHost
+    keepHeader (name, _) = not (isProxyStripHeader name) && name /= HT.hHost
 
-isProxyHeader :: HT.HeaderName -> Bool
-isProxyHeader h = "proxy" `BS8.isPrefixOf` CI.foldedCase h
-
-isForwardedHeader :: HT.HeaderName -> Bool
-isForwardedHeader h = "x-forwarded" `BS8.isPrefixOf` CI.foldedCase h
-
-isCDNHeader :: HT.HeaderName -> Bool
-isCDNHeader h = "cf-" `BS8.isPrefixOf` CI.foldedCase h || h == "cdn-loop"
-
-isToStripHeader :: HT.HeaderName -> Bool
-isToStripHeader h = isProxyHeader h || isForwardedHeader h || isCDNHeader h || h == "X-Real-IP" || h == "X-Scheme"

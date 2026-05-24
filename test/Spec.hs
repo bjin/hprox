@@ -7,6 +7,7 @@ module Main
 import Network.HProx.AuthSpec       qualified as AuthSpec
 import Network.HProx.ConfigSpec     qualified as ConfigSpec
 import Network.HProx.DoHSpec        qualified as DoHSpec
+import Network.HProx.HeadersSpec    qualified as HeadersSpec
 import Network.HProx.MiddlewareSpec qualified as MiddlewareSpec
 import Network.HProx.ProxySpec      qualified as ProxySpec
 import Network.HProx.PureSpec       qualified as PureSpec
@@ -25,6 +26,7 @@ main = hspec $ do
   ConfigSpec.spec
   DoHSpec.spec
   PureSpec.spec
+  HeadersSpec.spec
   MiddlewareSpec.spec
   RouteSpec.spec
   ProxySpec.spec
