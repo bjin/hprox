@@ -18,22 +18,23 @@ module Network.HProx
   , run
   ) where
 
-import Data.ByteString.Char8       qualified as BS8
-import Data.Default.Class          (def)
-import Data.List                   (isSuffixOf)
-import Data.String                 (fromString)
-import Data.Version                (showVersion)
-import Network.HTTP.Client.TLS     (newTlsManager)
-import Network.HTTP.Types          qualified as HT
-import Network.TLS                 qualified as TLS
+#ifdef QUIC_ENABLED
+import Data.ByteString.Char8 qualified as BS8
+import Data.Default.Class    (def)
+#endif
+import Data.String             (fromString)
+import Data.Version            (showVersion)
+import Network.HTTP.Client.TLS (newTlsManager)
+import Network.HTTP.Types      qualified as HT
+#ifdef QUIC_ENABLED
+import Network.TLS qualified as TLS
+#endif
 import Network.TLS.SessionManager  qualified as SM
 import Network.Wai                 (Application, rawPathInfo)
 import Network.Wai.Handler.Warp
     (InvalidRequest(..), defaultSettings, defaultShouldDisplayException, runSettings, setHost,
     setLogger, setNoParsePath, setOnException, setPort, setServerName)
-import Network.Wai.Handler.WarpTLS
-    (OnInsecure(..), WarpTLSException, defaultTlsSettings, onInsecure, runTLS, tlsAllowedVersions,
-    tlsCredentials, tlsServerHooks, tlsSessionManager)
+import Network.Wai.Handler.WarpTLS (WarpTLSException, runTLS)
 
 import Control.Exception    (Exception(..))
 import GHC.IO.Exception     (IOErrorType(..))
@@ -67,9 +68,6 @@ import Network.HProx.Impl
 import Network.HProx.Log
 import Network.HProx.Runtime
 import Paths_hprox
-
-readCert :: CertFile -> IO TLS.Credential
-readCert (CertFile c k) = either error id <$> TLS.credentialLoadX509 c k
 
 
 getLoggerType :: String -> LogType' LogStr
@@ -117,16 +115,13 @@ run :: Application -- ^ fallback application
 run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
-    let certfiles = _ssl
-
-    certs <- mapM (readCert.snd) certfiles
+    allCerts <- loadTlsCredentials _ssl
     smgr <- SM.newSessionManager SM.defaultConfig
 
-    let isSSL = not (null certfiles)
-        allCerts = zip (map fst certfiles) certs
+    let isSSL = not (null _ssl)
 
     when isSSL $ do
-        logger INFO $ "read " <> toLogStr (show $ length certs) <> " certificates"
+        logger INFO $ "read " <> toLogStr (show $ length allCerts) <> " certificates"
         logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
 
     let settings = setHost (fromString (fromMaybe "*6" _bind)) $
@@ -173,26 +168,6 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
             | otherwise                           =
                 logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
-        tlsset defaultCert = defaultTlsSettings
-            { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
-            , tlsCredentials     = Just (TLS.Credentials [defaultCert])
-            , onInsecure         = AllowInsecure
-            , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
-            , tlsSessionManager  = Just smgr
-            }
-
-        onSNI Nothing     = fail "SNI: unspecified"
-        onSNI (Just host) = lookupSNI host allCerts
-
-        lookupSNI host [] = fail ("SNI: unknown hostname (" ++ show host ++ ")")
-        lookupSNI host ((p, cert) : cs)
-          | checkSNI host p = return (TLS.Credentials [cert])
-          | otherwise       = lookupSNI host cs
-
-        checkSNI host pat = case pat of
-            '*' : '.' : p -> ('.' : p) `isSuffixOf` host
-            p             -> host == p
-
 #ifdef QUIC_ENABLED
         alpn _ = return . fromMaybe "" . find (== "h3")
         altsvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
@@ -202,10 +177,12 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
             , Q.scVersions       = [Q.Version1, Q.Version2]
             , Q.scCredentials    = TLS.Credentials [defaultCert]
             , Q.scALPN           = Just alpn
-            , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
+            , Q.scTlsHooks       = def { TLS.onServerNameIndication = lookupSNICredentials' }
             , Q.scUse0RTT        = True
             , Q.scSessionManager = smgr
             }
+
+        lookupSNICredentials' host = lookupSNICredentials host allCerts
 
         runner = case allCerts of
             []                  -> runSettings settings
@@ -213,13 +190,13 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
                 logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
                 mapConcurrently_ ($ app)
                     [ runQUIC (quicset defaultCert qport) settings
-                    , runTLS (tlsset defaultCert) (setAltSvc (altsvc qport) settings)
+                    , runTLS (buildTlsSettings smgr allCerts defaultCert) (setAltSvc (altsvc qport) settings)
                     ]
-            (_, defaultCert) : _ -> runTLS (tlsset defaultCert) settings
+            (_, defaultCert) : _ -> runTLS (buildTlsSettings smgr allCerts defaultCert) settings
 #else
         runner = case allCerts of
             []                   -> runSettings settings
-            (_, defaultCert) : _ -> runTLS (tlsset defaultCert) settings
+            (_, defaultCert) : _ -> runTLS (buildTlsSettings smgr allCerts defaultCert) settings
 #endif
 
     pauth <- loadProxyAuth logger _auth

@@ -6,17 +6,25 @@ module Network.HProx.Runtime
   ( ProxyRuntime(..)
   , buildProxyApplication
   , buildProxyRuntime
+  , buildTlsSettings
   , defaultCertificate
+  , loadTlsCredentials
+  , lookupSNICredentials
   , lookupSNIHost
   , sniPatternMatches
   ) where
 
-import Data.ByteString.Char8 qualified as BS8
-import Data.List             (isSuffixOf, sortOn)
-import Data.Maybe            (isJust)
-import Data.Ord              (Down(..))
-import Network.HTTP.Client   qualified as HC
-import Network.Wai           (Application)
+import Data.ByteString.Char8       qualified as BS8
+import Data.Default.Class          (def)
+import Data.List                   (isSuffixOf, sortOn)
+import Data.Maybe                  (isJust)
+import Data.Ord                    (Down(..))
+import Network.HTTP.Client         qualified as HC
+import Network.TLS                 qualified as TLS
+import Network.Wai                 (Application)
+import Network.Wai.Handler.WarpTLS
+    (OnInsecure(..), TLSSettings, defaultTlsSettings, onInsecure, tlsAllowedVersions,
+    tlsCredentials, tlsServerHooks, tlsSessionManager)
 
 import Network.HProx.Config
 import Network.HProx.Impl
@@ -53,6 +61,27 @@ buildProxyApplication isSSL pset manager fallback =
         httpProxy pset manager $
           reverseProxy pset manager fallback
 
+
+loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
+loadTlsCredentials certFiles =
+  zip (map fst certFiles) <$> mapM (readTlsCredential . snd) certFiles
+  where
+    readTlsCredential (CertFile cert key) = either error id <$> TLS.credentialLoadX509 cert key
+
+buildTlsSettings :: TLS.SessionManager -> [(String, TLS.Credential)] -> TLS.Credential -> TLSSettings
+buildTlsSettings sessionManager certs defaultCert = defaultTlsSettings
+  { tlsServerHooks     = def { TLS.onServerNameIndication = lookupSNICredentials' }
+  , tlsCredentials     = Just (TLS.Credentials [defaultCert])
+  , onInsecure         = AllowInsecure
+  , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
+  , tlsSessionManager  = Just sessionManager
+  }
+  where
+    lookupSNICredentials' host = lookupSNICredentials host certs
+
+lookupSNICredentials :: Maybe String -> [(String, TLS.Credential)] -> IO TLS.Credentials
+lookupSNICredentials host certs =
+  either fail (return . TLS.Credentials . (: [])) (lookupSNIHost host certs)
 
 defaultCertificate :: [(String, a)] -> Maybe a
 defaultCertificate []              = Nothing
