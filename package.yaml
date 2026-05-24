@@ -46,6 +46,14 @@ library:
   source-dirs: src
   exposed-modules:
   - Network.HProx
+  other-modules:
+  - Network.HProx.Config
+  - Network.HProx.DoH
+  - Network.HProx.Impl
+  - Network.HProx.Log
+  - Network.HProx.Naive
+  - Network.HProx.Util
+  - Paths_hprox
   dependencies:
   - async >= 2.2
   - base >= 4.12 && < 5
