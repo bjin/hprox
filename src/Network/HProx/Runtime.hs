@@ -6,10 +6,13 @@ module Network.HProx.Runtime
   ( ProxyRuntime(..)
   , buildProxyApplication
   , buildProxyRuntime
+  , defaultCertificate
+  , lookupSNIHost
+  , sniPatternMatches
   ) where
 
 import Data.ByteString.Char8 qualified as BS8
-import Data.List             (sortOn)
+import Data.List             (isSuffixOf, sortOn)
 import Data.Maybe            (isJust)
 import Data.Ord              (Down(..))
 import Network.HTTP.Client   qualified as HC
@@ -49,3 +52,21 @@ buildProxyApplication isSSL pset manager fallback =
       (if isSSL then forceSSL pset else id) $
         httpProxy pset manager $
           reverseProxy pset manager fallback
+
+
+defaultCertificate :: [(String, a)] -> Maybe a
+defaultCertificate []              = Nothing
+defaultCertificate ((_, cert) : _) = Just cert
+lookupSNIHost :: Maybe String -> [(String, a)] -> Either String a
+lookupSNIHost Nothing _ = Left "SNI: unspecified"
+lookupSNIHost (Just host) certs = go certs
+  where
+    go [] = Left $ "SNI: unknown hostname (" ++ show host ++ ")"
+    go ((pattern, value) : rest)
+      | sniPatternMatches host pattern = Right value
+      | otherwise                      = go rest
+
+sniPatternMatches :: String -> String -> Bool
+sniPatternMatches host pattern = case pattern of
+  '*' : '.' : suffix -> ('.' : suffix) `isSuffixOf` host
+  exact              -> host == exact
