@@ -38,7 +38,10 @@ isProxyHeader :: HeaderName -> Bool
 isProxyHeader header = "proxy" `BS.isPrefixOf` CI.foldedCase header
 
 isForwardedHeader :: HeaderName -> Bool
-isForwardedHeader header = "x-forwarded" `BS.isPrefixOf` CI.foldedCase header
+isForwardedHeader header =
+  folded == "forwarded" || "x-forwarded" `BS.isPrefixOf` folded
+  where
+    folded = CI.foldedCase header
 
 isCDNHeader :: HeaderName -> Bool
 isCDNHeader header = "cf-" `BS.isPrefixOf` CI.foldedCase header || header == cdnLoopHeader

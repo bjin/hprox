@@ -6,10 +6,15 @@ module Network.HProx.ProxySpec
   ( spec
   ) where
 
-import Data.ByteString.Lazy qualified as LBS
-import Network.HTTP.Client  qualified as HC
-import Network.HTTP.Types   qualified as HT
+import Data.ByteString.Base64     qualified as B64
+import Data.ByteString.Char8      qualified as BS8
+import Data.ByteString.Lazy       qualified as LBS
+import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Network.HTTP.Client        qualified as HC
+import Network.HTTP.Types         qualified as HT
+import Network.HTTP.Types.Header  qualified as HT
 import Network.Wai
+import Network.Wai.Handler.Warp   qualified as Warp
 import Network.Wai.Test
 
 import Network.HProx.Impl
@@ -83,6 +88,47 @@ spec = do
     it "rejects HTTP/2 proxy requests without a Host header" $
       selectHttpProxyTarget http2ProxyRequest { requestHeaderHost = Nothing }
         `shouldBe` Nothing
+
+    it "renders HTTP proxy authorities without the default port" $ do
+      renderHttpProxyAuthority (HttpProxyTarget "example.com" 80 "/")
+        `shouldBe` "example.com"
+      renderHttpProxyAuthority (HttpProxyTarget "example.com" 443 "/")
+        `shouldBe` "example.com:443"
+      renderHttpProxyAuthority (HttpProxyTarget "example.com" 8080 "/")
+        `shouldBe` "example.com:8080"
+
+  describe "HTTP proxy upstream requests" $
+    it "uses absolute URI authority for Host and strips proxy boundary headers" $
+      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+        let authority = "127.0.0.1:" <> BS8.pack (show port)
+            responseBody = LBS8.lines . simpleBody
+            proxiedReq = defaultRequest
+              { requestMethod = "GET"
+              , rawPathInfo = "http://" <> authority <> "/resource"
+              , requestHeaderHost = Just "evil.example"
+              , requestHeaders =
+                  [ (HT.hHost, "evil.example")
+                  , (HT.hProxyAuthorization, "Basic " <> B64.encode "alice:secret")
+                  , ("Forwarded", "for=203.0.113.7")
+                  , ("X-Forwarded-For", "203.0.113.7")
+                  , ("Proxy-Connection", "keep-alive")
+                  , ("cf-ray", "abc123")
+                  , ("X-Real-IP", "203.0.113.7")
+                  , ("User-Agent", "hprox-test")
+                  ]
+              }
+        response <- runProxyApp (httpProxy authorizedSettings) proxiedReq
+        simpleStatus response `shouldBe` HT.status200
+        responseBody response
+          `shouldBe` [ LBS.fromStrict authority
+                     , LBS.fromStrict authority
+                     , "False"
+                     , "False"
+                     , "False"
+                     , "False"
+                     , "False"
+                     , "True"
+                     ]
 runProxyApp :: (HC.Manager -> Middleware) -> Request -> IO SResponse
 
 runProxyApp middleware req = do
@@ -143,6 +189,11 @@ hiddenAuthSettings = authRequiredSettings
   { hideProxyAuth = True
   }
 
+authorizedSettings :: ProxySettings
+authorizedSettings = baseSettings
+  { proxyAuth = Just (== "alice:secret")
+  }
+
 baseSettings :: ProxySettings
 baseSettings = ProxySettings
   { proxyAuth      = Nothing
@@ -154,3 +205,20 @@ baseSettings = ProxySettings
   , acmeThumbprint = Nothing
   , logger         = \_ _ -> return ()
   }
+
+observeProxyRequestApp :: Application
+observeProxyRequestApp req respond = respond $ responseLBS
+  HT.status200
+  [("Content-Type", "text/plain")]
+  (LBS8.unlines
+     [ LBS.fromStrict $ maybe "" id $ requestHeaderHost req
+     , LBS.fromStrict $ maybe "" id $ lookup HT.hHost (requestHeaders req)
+     , LBS8.pack $ show $ hasHeader HT.hProxyAuthorization
+     , LBS8.pack $ show $ hasHeader "Forwarded"
+     , LBS8.pack $ show $ hasHeader "X-Forwarded-For"
+     , LBS8.pack $ show $ hasHeader "Proxy-Connection"
+     , LBS8.pack $ show $ hasHeader "cf-ray"
+     , LBS8.pack $ show $ hasHeader "User-Agent"
+     ])
+  where
+    hasHeader name = lookup name (requestHeaders req) /= Nothing

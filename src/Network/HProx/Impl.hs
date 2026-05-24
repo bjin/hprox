@@ -14,6 +14,7 @@ module Network.HProx.Impl
   , httpProxy
   , logRequest
   , pacProvider
+  , renderHttpProxyAuthority
   , reverseProxy
   , selectHttpProxyTarget
   ) where
@@ -68,6 +69,14 @@ data HttpProxyTarget = HttpProxyTarget
   , httpProxyTargetRawPath :: !BS.ByteString
   }
   deriving (Eq, Show)
+
+renderHttpProxyAuthority :: HttpProxyTarget -> BS.ByteString
+renderHttpProxyAuthority HttpProxyTarget{..} = renderAuthorityWithDefault 80 httpProxyTargetHost httpProxyTargetPort
+
+renderAuthorityWithDefault :: Int -> BS.ByteString -> Int -> BS.ByteString
+renderAuthorityWithDefault defaultPort host port
+    | port == defaultPort = host
+    | otherwise           = BS.concat [host, ":", BS8.pack (show port)]
 
 logRequest :: Request -> LogStr
 logRequest req = toLogStr (requestMethod req) <>
@@ -249,11 +258,11 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
 
     proxyResponseFor req
         | Just (wsDest, wsWrapper) <- websocketTarget = return $ wsWrapper wsDest
-        | Just HttpProxyTarget{..} <- selectHttpProxyTarget req = do
+        | Just target@HttpProxyTarget{..} <- selectHttpProxyTarget req = do
             authorized <- checkAuth pset req
             if authorized
               then return $ WPRModifiedRequest
-                (proxiedRequest httpProxyTargetRawPath)
+                (proxiedRequest target)
                 (ProxyDest httpProxyTargetHost httpProxyTargetPort)
               else if hideProxyAuth
                      then do
@@ -272,10 +281,17 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
             then Just (ProxyDest wsHost wsPort, wsWrapper)
             else Nothing
 
-        proxiedRequest newRawPath = req
-          { rawPathInfo = newRawPath
-          , requestHeaders = filter (not.isProxyStripHeader.fst) $ requestHeaders req
-          }
+        proxiedRequest target@HttpProxyTarget{..} =
+          let authority = renderHttpProxyAuthority target
+          in req
+               { rawPathInfo = httpProxyTargetRawPath
+               , requestHeaderHost = Just authority
+               , requestHeaders =
+                   (HT.hHost, authority) :
+                   filter (not.outgoingStripHeader.fst) (requestHeaders req)
+               }
+
+        outgoingStripHeader header = header == HT.hHost || isProxyStripHeader header
 
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do

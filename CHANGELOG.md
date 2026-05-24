@@ -17,7 +17,8 @@
 - Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.
 - Hardened malformed HTTP proxy target parsing to reject malformed explicit ports and HTTP/2 proxy requests without a Host header while preserving bracketed IPv6 authorities.
 - Replaced the Argon2 password-hash `error` path with a typed `PasswordHashError` thrown at the IO boundary.
-
+- Normalized HTTP proxy forwarding authority to render Host from the parsed URI and omit default `:80`
+- Stripped inbound Host and proxy-boundary headers (including `Forwarded`) when forwarding proxied HTTP requests
 ## 0.6.5
 
 - bump stack dependencies
