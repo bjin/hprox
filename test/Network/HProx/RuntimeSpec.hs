@@ -6,7 +6,7 @@ module Network.HProx.RuntimeSpec
   ( spec
   ) where
 
-import Control.Exception           (SomeException, toException)
+import Control.Exception           (SomeException, displayException, toException)
 import GHC.IO.Exception            (IOErrorType(..))
 import Network.HTTP2.Client        qualified as H2
 import Network.Wai
@@ -60,6 +60,10 @@ spec = do
 
     it "keeps ordinary displayable exceptions at DEBUG level" $
       shouldIgnoreRuntimeException DEBUG displayedException `shouldBe` False
+
+    it "unwraps HTTP/2 wrappers before selecting the exception to log" $
+      fmap displayException (runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen displayedException)))
+        `shouldBe` Just (displayException displayedException)
 
     it "suppresses EOF IO exceptions" $
       shouldIgnoreRuntimeException DEBUG eofException `shouldBe` True

@@ -12,27 +12,33 @@ module Network.HProx.Runtime
   , buildProxyRuntime
   , buildTlsSettings
   , buildWarpRuntimePlan
+  , buildWarpSettings
   , defaultCertificate
   , loadTlsCredentials
   , lookupSNICredentials
   , lookupSNIHost
+  , runtimeExceptionToLog
   , shouldIgnoreRuntimeException
   , shouldSuppressAccessLog
   , sniPatternMatches
   ) where
 
-import Control.Exception           (SomeException, fromException)
+import Control.Exception           (SomeException, displayException, fromException)
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.List                   (isSuffixOf, sortOn)
-import Data.Maybe                  (fromMaybe, isJust)
+import Data.Maybe                  (fromMaybe, isJust, isNothing)
 import Data.Ord                    (Down(..))
+import Data.String                 (fromString)
 import GHC.IO.Exception            (IOErrorType(..))
 import Network.HTTP.Client         qualified as HC
+import Network.HTTP.Types          qualified as HT
 import Network.HTTP2.Client        qualified as H2
 import Network.TLS                 qualified as TLS
 import Network.Wai                 (Application, Request, rawPathInfo)
-import Network.Wai.Handler.Warp    (InvalidRequest(..), defaultShouldDisplayException)
+import Network.Wai.Handler.Warp
+    (InvalidRequest(..), Settings, defaultSettings, defaultShouldDisplayException,
+    setBeforeMainLoop, setHost, setLogger, setNoParsePath, setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
     (OnInsecure(..), TLSSettings, WarpTLSException, defaultTlsSettings, onInsecure,
     tlsAllowedVersions, tlsCredentials, tlsServerHooks, tlsSessionManager)
@@ -94,24 +100,54 @@ buildWarpRuntimePlan Config{..} = WarpRuntimePlan
   , runtimeNoParsePath = True
   }
 
+buildWarpSettings :: Config -> Logger -> Maybe (IO ()) -> Settings
+buildWarpSettings config logger beforeMainLoop =
+  applyBeforeMainLoop $
+    setHost (fromString (runtimeBindHost plan)) $
+      setPort (runtimePort plan) $
+        setLogger (warpAccessLogger logger) $
+          setOnException (runtimeExceptionHandler logger (_loglevel config)) $
+            setNoParsePath (runtimeNoParsePath plan) $
+              setServerName (runtimeServerName plan) defaultSettings
+  where
+    plan = buildWarpRuntimePlan config
+    applyBeforeMainLoop = maybe id setBeforeMainLoop beforeMainLoop
+
+runtimeExceptionHandler :: Logger -> LogLevel -> Maybe Request -> SomeException -> IO ()
+runtimeExceptionHandler logger logLevel req ex =
+  case runtimeExceptionToLog logLevel ex of
+    Nothing    -> return ()
+    Just ex' ->
+      logger DEBUG $ "exception: " <> toLogStr (displayException ex') <>
+        maybe "" (\req' -> " from: " <> logRequest req') req
+
+warpAccessLogger :: Logger -> Request -> HT.Status -> Maybe Integer -> IO ()
+warpAccessLogger logger req status _
+  | shouldSuppressAccessLog req = return ()
+  | otherwise =
+      logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
+
 shouldSuppressAccessLog :: Request -> Bool
 shouldSuppressAccessLog req = rawPathInfo req == "/.hprox/health"
 
 shouldIgnoreRuntimeException :: LogLevel -> SomeException -> Bool
-shouldIgnoreRuntimeException logLevel ex
-  | logLevel > DEBUG = True
-  | not (defaultShouldDisplayException ex) = True
+shouldIgnoreRuntimeException logLevel ex = isNothing (runtimeExceptionToLog logLevel ex)
+
+runtimeExceptionToLog :: LogLevel -> SomeException -> Maybe SomeException
+runtimeExceptionToLog logLevel ex
+  | logLevel > DEBUG = Nothing
+  | not (defaultShouldDisplayException ex) = Nothing
   | Just ioe <- fromException ex
-  , ioeGetErrorType ioe == EOF = True
-  | Just (H2.BadThingHappen ex') <- fromException ex = shouldIgnoreRuntimeException logLevel ex'
-  | Just (_ :: H2.HTTP2Error) <- fromException ex = True
+  , ioeGetErrorType ioe == EOF = Nothing
+  | Just (H2.BadThingHappen ex') <- fromException ex = runtimeExceptionToLog logLevel ex'
+  | Just (_ :: H2.HTTP2Error) <- fromException ex = Nothing
 #ifdef QUIC_ENABLED
-  | Just (Q.BadThingHappen ex') <- fromException ex = shouldIgnoreRuntimeException logLevel ex'
-  | Just (_ :: Q.QUICException) <- fromException ex = True
+  | Just (Q.BadThingHappen ex') <- fromException ex = runtimeExceptionToLog logLevel ex'
+  | Just (_ :: Q.QUICException) <- fromException ex = Nothing
 #endif
-  | Just (_ :: WarpTLSException) <- fromException ex = True
-  | Just ConnectionClosedByPeer <- fromException ex = True
-  | otherwise = False
+  | Just (_ :: WarpTLSException) <- fromException ex = Nothing
+  | Just ConnectionClosedByPeer <- fromException ex = Nothing
+  | otherwise = Just ex
 
 loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
 loadTlsCredentials certFiles =

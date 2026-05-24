@@ -3,7 +3,6 @@
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
 
 {-| Instead of running @hprox@ binary directly, you can use this library
     to run HProx in front of arbitrary WAI 'Application'.
@@ -22,39 +21,31 @@ module Network.HProx
 import Data.ByteString.Char8 qualified as BS8
 import Data.Default.Class    (def)
 #endif
-import Data.String             (fromString)
+#ifdef QUIC_ENABLED
+import Data.String qualified as String
+#endif
 import Data.Version            (showVersion)
 import Network.HTTP.Client.TLS (newTlsManager)
-import Network.HTTP.Types      qualified as HT
 #ifdef QUIC_ENABLED
 import Network.TLS qualified as TLS
 #endif
 import Network.TLS.SessionManager  qualified as SM
-import Network.Wai                 (Application, rawPathInfo)
-import Network.Wai.Handler.Warp
-    (InvalidRequest(..), defaultSettings, defaultShouldDisplayException, runSettings, setHost,
-    setLogger, setNoParsePath, setOnException, setPort, setServerName)
-import Network.Wai.Handler.WarpTLS (WarpTLSException, runTLS)
-
-import Control.Exception    (Exception(..))
-import GHC.IO.Exception     (IOErrorType(..))
-import Network.HTTP2.Client qualified as H2
-import System.IO.Error      (ioeGetErrorType)
+import Network.Wai                 (Application)
+import Network.Wai.Handler.Warp    (runSettings)
+import Network.Wai.Handler.WarpTLS (runTLS)
 
 #ifdef QUIC_ENABLED
 import Control.Concurrent.Async     (mapConcurrently_)
 import Data.List                    (find)
-import Network.QUIC                 qualified as Q
 import Network.QUIC.Internal        qualified as Q
 import Network.Wai.Handler.Warp     (setAltSvc)
 import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
 #ifdef OS_UNIX
-import Control.Exception        (SomeException, catch)
-import Network.Wai.Handler.Warp (setBeforeMainLoop)
+import Control.Exception    (SomeException, catch)
 import System.Exit
-import System.Posix.Process     (exitImmediately)
+import System.Posix.Process (exitImmediately)
 import System.Posix.User
 #endif
 
@@ -64,7 +55,6 @@ import Data.Maybe
 import Network.HProx.Auth
 import Network.HProx.Config
 import Network.HProx.DoH
-import Network.HProx.Impl
 import Network.HProx.Log
 import Network.HProx.Runtime
 import Paths_hprox
@@ -124,15 +114,13 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
         logger INFO $ "read " <> toLogStr (show $ length allCerts) <> " certificates"
         logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
 
-    let settings = setHost (fromString (fromMaybe "*6" _bind)) $
-                   setPort _port $
-                   setLogger warpLogger $
-                   setOnException exceptionHandler $
+    let beforeMainLoop =
 #ifdef OS_UNIX
-                   setBeforeMainLoop doBeforeMainLoop $
+            Just doBeforeMainLoop
+#else
+            Nothing
 #endif
-                   setNoParsePath True $
-                   setServerName _name defaultSettings
+        settings = buildWarpSettings conf logger beforeMainLoop
 
 #ifdef OS_UNIX
         doBeforeMainLoop = do
@@ -147,33 +135,12 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
 #endif
 #endif
 
-        exceptionHandler req ex
-            | _loglevel > DEBUG                                 = return ()
-            | not (defaultShouldDisplayException ex)            = return ()
-            | Just (ioeGetErrorType -> EOF) <- fromException ex = return ()
-            | Just (H2.BadThingHappen ex') <- fromException ex  = exceptionHandler req ex'
-            | Just (_ :: H2.HTTP2Error) <- fromException ex     = return ()
-#ifdef QUIC_ENABLED
-            | Just (Q.BadThingHappen ex') <- fromException ex   = exceptionHandler req ex'
-            | Just (_ :: Q.QUICException) <- fromException ex   = return ()
-#endif
-            | Just (_ :: WarpTLSException) <- fromException ex  = return ()
-            | Just ConnectionClosedByPeer <- fromException ex   = return ()
-            | otherwise                                         =
-                logger DEBUG $ "exception: " <> toLogStr (displayException ex) <>
-                    maybe "" (\req' -> " from: " <> logRequest req') req
-
-        warpLogger req status _
-            | rawPathInfo req == "/.hprox/health" = return ()
-            | otherwise                           =
-                logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
-
 #ifdef QUIC_ENABLED
         alpn _ = return . fromMaybe "" . find (== "h3")
         altsvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
 
         quicset defaultCert qport = Q.defaultServerConfig
-            { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
+            { Q.scAddresses      = [(String.fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
             , Q.scVersions       = [Q.Version1, Q.Version2]
             , Q.scCredentials    = TLS.Credentials [defaultCert]
             , Q.scALPN           = Just alpn
