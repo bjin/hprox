@@ -12,6 +12,7 @@
 - Refactored DoH handling into explicit parse/resolve/respond helpers and made POST body reading support split request chunks within the existing 4096-byte limit.
 - Named naiveproxy padding protocol constants and added deterministic parser/round-trip coverage.
 - Updated copyright notices to 2026 in LICENSE, package metadata, and all touched source/test headers
+- Hardened auth-file handling by stripping one trailing carriage return from each entry before parsing, hashing, and rewrite decisions
 
 ### Fixed
 - Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.
@@ -20,9 +21,12 @@
 - Normalized HTTP proxy forwarding authority to render Host from the parsed URI and omit default `:80`
 - Stripped inbound Host and proxy-boundary headers (including `Forwarded`) when forwarding proxied HTTP requests
 - Enforced strict `Proxy-Authorization` parsing for HTTP proxy authentication: only `Basic` credentials with valid base64 decode are accepted now
+- Ensured malformed auth-file warnings redact raw line contents and report line numbers with optional username context
+- Added tests covering CRLF plaintext auth-file verification/rewrite and malformed-line log redaction
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
+- Prevented auth-file logging from leaking password-like fragments by replacing raw-line diagnostics with non-sensitive context
 ## 0.6.5
 
 - bump stack dependencies
