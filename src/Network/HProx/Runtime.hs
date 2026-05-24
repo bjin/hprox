@@ -52,11 +52,8 @@ import Network.Wai.Handler.WarpTLS
 import System.IO.Error (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
-import Control.Concurrent.Async     (mapConcurrently_)
-import Data.List                    (find)
-import Network.QUIC.Internal        qualified as Q
-import Network.Wai.Handler.Warp     (setAltSvc)
-import Network.Wai.Handler.WarpQUIC (runQUIC)
+import Network.HProx.Platform.Quic
+import Network.QUIC.Internal       qualified as Q
 #endif
 
 import Network.HProx.Config
@@ -169,12 +166,16 @@ runProxyServer conf@Config{..} logger settings sessionManager certs app = do
       (TlsWarpRunner, Just defaultCert) ->
         runTLS (buildTlsSettings sessionManager certs defaultCert) settings
 #ifdef QUIC_ENABLED
-      (QuicAndTlsRunner qport, Just defaultCert) -> \app' -> do
-        logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
-        mapConcurrently_ ($ app')
-          [ runQUIC (quicSettings defaultCert qport) settings
-          , runTLS (buildTlsSettings sessionManager certs defaultCert) (setAltSvc (altSvc qport) settings)
-          ]
+      (QuicAndTlsRunner qport, Just defaultCert) ->
+        runQuicAndTls
+          logger
+          _bind
+          settings
+          (buildTlsSettings sessionManager certs defaultCert)
+          lookupSNICredentials'
+          sessionManager
+          defaultCert
+          qport
 #endif
 #ifndef QUIC_ENABLED
       (QuicAndTlsRunner _, Just defaultCert) ->
@@ -182,20 +183,8 @@ runProxyServer conf@Config{..} logger settings sessionManager certs app = do
 #endif
       (_, Nothing) -> runSettings settings
 
+
 #ifdef QUIC_ENABLED
-    alpn _ = return . fromMaybe "" . find (== "h3")
-    altSvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
-
-    quicSettings defaultCert qport = Q.defaultServerConfig
-      { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
-      , Q.scVersions       = [Q.Version1, Q.Version2]
-      , Q.scCredentials    = TLS.Credentials [defaultCert]
-      , Q.scALPN           = Just alpn
-      , Q.scTlsHooks       = def { TLS.onServerNameIndication = lookupSNICredentials' }
-      , Q.scUse0RTT        = True
-      , Q.scSessionManager = sessionManager
-      }
-
     lookupSNICredentials' host = lookupSNICredentials host certs
 #endif
 
