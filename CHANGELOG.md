@@ -29,6 +29,7 @@
 - Made reverse route prefix matching boundary-aware so /api matches /api/v1 but not /apiary or /apix
 - Made reverse proxy path rewrites preserve unmatched paths and handle exact and nested matches consistently
 - Compared reverse-route hostnames case-insensitively after stripping ports
+- Preserved `forceSSL` HTTPS redirect targets for origin-form requests by keeping request path and query; for absolute-form proxy requests the redirect now uses the parsed target and omits default `:80`/`:443` ports while preserving non-default ports
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged

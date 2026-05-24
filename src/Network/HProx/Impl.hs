@@ -101,15 +101,39 @@ forceSSL pset app req respond
 
 redirectToSSL :: Application
 redirectToSSL req respond
-    | Just host <- requestHeaderHost req = respond $ responseKnownLength
+    | Just _ <- requestHeaderHost req = respond $ responseKnownLength
         HT.status301
-        [("Location", "https://" `BS.append` host)]
+        [("Location", redirectLocation req)]
         ""
-    | otherwise                          = respond $ responseKnownLength
+    | otherwise                       = respond $ responseKnownLength
         (HT.mkStatus 426 "Upgrade Required")
         [("Upgrade", "TLS/1.0, HTTP/1.1"), ("Connection", "Upgrade")]
         ""
 
+redirectLocation :: Request -> BS.ByteString
+redirectLocation req
+  | Just HttpProxyTarget{..} <- selectHttpProxyTarget req =
+      BS.concat
+        [ "https://"
+        , renderRedirectAuthority httpProxyTargetHost httpProxyTargetPort
+        , httpProxyTargetRawPath
+        , rawQueryString req
+        ]
+  | Just host <- requestHeaderHost req =
+      BS.concat ["https://", host, originFormPathAndQuery req]
+  | otherwise = "https://"
+
+renderRedirectAuthority :: BS.ByteString -> Int -> BS.ByteString
+renderRedirectAuthority host port
+  | port == 80 || port == 443 = host
+  | otherwise = renderAuthorityWithDefault 443 host port
+
+originFormPathAndQuery :: Request -> BS.ByteString
+originFormPathAndQuery req
+  | BS.null path || "/" `BS.isPrefixOf` path = path <> rawQueryString req
+  | otherwise = ""
+  where
+    path = rawPathInfo req
 
 checkAuth :: ProxySettings -> Request -> IO Bool
 checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of

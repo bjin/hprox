@@ -86,12 +86,38 @@ spec = do
       simpleStatus response `shouldBe` fallbackStatus
 
   describe "forceSSL" $ do
-    it "redirects insecure requests with Host to HTTPS" $ do
-      response <- runApp (forceSSL testSettings) $ defaultRequest
+    it "redirects insecure origin-form requests with path and query to HTTPS" $ do
+      response <- runApp (forceSSL testSettings) $ (requestPath "/docs")
         { requestHeaderHost = Just "example.com"
+        , rawQueryString = "?q=1"
         }
       simpleStatus response `shouldBe` HT.status301
-      lookup "Location" (simpleHeaders response) `shouldBe` Just "https://example.com"
+      lookup "Location" (simpleHeaders response) `shouldBe` Just "https://example.com/docs?q=1"
+
+    it "redirects root origin-form requests to the HTTPS root" $ do
+      response <- runApp (forceSSL testSettings) $ defaultRequest
+        { requestHeaderHost = Just "example.com"
+        , rawPathInfo = "/"
+        }
+      simpleStatus response `shouldBe` HT.status301
+      lookup "Location" (simpleHeaders response) `shouldBe` Just "https://example.com/"
+
+    it "redirects insecure absolute-form proxy requests to the parsed HTTPS target" $ do
+      response <- runApp (forceSSL testSettings) $ defaultRequest
+        { requestHeaderHost = Just "proxy.local"
+        , rawPathInfo = "http://target.example:8080/docs"
+        , rawQueryString = "?q=1"
+        }
+      simpleStatus response `shouldBe` HT.status301
+      lookup "Location" (simpleHeaders response) `shouldBe` Just "https://target.example:8080/docs?q=1"
+
+    it "omits default ports from absolute-form HTTPS redirect authorities" $ do
+      response <- runApp (forceSSL testSettings) $ defaultRequest
+        { requestHeaderHost = Just "proxy.local"
+        , rawPathInfo = "http://target.example/docs"
+        }
+      simpleStatus response `shouldBe` HT.status301
+      lookup "Location" (simpleHeaders response) `shouldBe` Just "https://target.example/docs"
 
     it "returns upgrade-required for insecure requests without Host" $ do
       response <- runApp (forceSSL testSettings) defaultRequest
