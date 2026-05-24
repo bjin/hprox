@@ -2,10 +2,12 @@
 
 ### Added
 - Added a minimal `hprox-test` Hspec smoke suite target and `test/Spec.hs` entrypoint to the package test configuration
+- Added characterization tests for pure helper functions (`parseHostPort`, `parseHostPortWithDefault`, `passwordReader`, `passwordWriter`, `logLevelReader`, `splitBy`) in `hprox-test` via new `Network.HProx.PureSpec`
 
 ### Changed
 - Corrected `extra-source-files` to reference `CHANGELOG.md` and scoped Stack GHC flags to local packages only
 - - Replaced partial `head` usage in `parseRequestForPadding` with `listToMaybe` for cleaner extraction of the first valid padding type
+- Extended `hprox-test` configuration to compile `src` modules directly so pure-unit specs can access internal helpers without changing the public API
 ## 0.6.5
 
 - bump stack dependencies

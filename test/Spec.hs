@@ -4,10 +4,13 @@ module Main
   ( main
   ) where
 
+import Network.HProx.PureSpec qualified as PureSpec
 import Test.Hspec
 
+
 main :: IO ()
-main = hspec $
+main = hspec $ do
   describe "hprox test suite" $
     it "runs" $
       True `shouldBe` True
+  PureSpec.spec

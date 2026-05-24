@@ -110,10 +110,48 @@ tests:
     main: Spec.hs
     source-dirs:
     - test
+    - src
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - async
     - base
+    - base64-bytestring
+    - binary
+    - bytestring
+    - case-insensitive
+    - conduit
+    - conduit-extra
+    - crypton
+    - data-default-class
+    - dns
+    - fast-logger
     - hspec
+    - http-client
+    - http-client-tls
+    - http-reverse-proxy
+    - http-types
+    - http2
+    - optparse-applicative
+    - random
+    - text
+    - tls
+    - tls-session-manager
+    - unordered-containers
+    - wai
+    - wai-extra
+    - warp
+    - warp-tls
+    when:
+    - condition: flag(quic)
+      cpp-options: -DQUIC_ENABLED
+      dependencies:
+      - http3
+      - quic
+      - warp-quic
+    - condition: '!os(windows)'
+      cpp-options: -DOS_UNIX
+      dependencies:
+      - unix
