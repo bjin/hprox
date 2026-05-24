@@ -54,6 +54,7 @@ library:
   - Network.HProx.Log
   - Network.HProx.Naive
   - Network.HProx.Route
+  - Network.HProx.Runtime
   - Network.HProx.Util
   - Paths_hprox
   dependencies:

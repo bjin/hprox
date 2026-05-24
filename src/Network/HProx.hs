@@ -20,8 +20,7 @@ module Network.HProx
 
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
-import Data.List                   (isSuffixOf, sortOn)
-import Data.Ord                    (Down(..))
+import Data.List                   (isSuffixOf)
 import Data.String                 (fromString)
 import Data.Version                (showVersion)
 import Network.HTTP.Client.TLS     (newTlsManager)
@@ -66,7 +65,7 @@ import Network.HProx.Config
 import Network.HProx.DoH
 import Network.HProx.Impl
 import Network.HProx.Log
-import Network.HProx.Route
+import Network.HProx.Runtime
 import Paths_hprox
 
 readCert :: CertFile -> IO TLS.Credential
@@ -115,7 +114,7 @@ dropRootPriviledge logger user group = do
 run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
-run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
+run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
     let certfiles = _ssl
@@ -227,23 +226,10 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
 
     manager <- newTlsManager
 
-    let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
-        revRoutes = map fromReverseRouteTuple revSorted
-        pset = ProxySettings
-          { proxyAuth      = pauth
-          , passPrompt     = Just _name
-          , wsRemote       = _ws
-          , revRemoteMap   = revRoutes
-          , hideProxyAuth  = _hide
-          , naivePadding   = _naive && isSSL
-          , acmeThumbprint = _acme
-          , logger         = logger
-          }
-        proxy = healthCheckProvider $
-                acmeProvider pset $
-                (if isSSL then forceSSL pset else id) $
-                httpProxy pset manager $
-                reverseProxy pset manager fallback
+    let proxyRuntime = buildProxyRuntime conf logger pauth isSSL
+        pset = runtimeProxySettings proxyRuntime
+        revSorted = runtimeReverseRoutes proxyRuntime
+        proxy = buildProxyApplication isSSL pset manager fallback
 
     forM_ _ws $ \ws -> logger INFO $ "websocket redirect: " <> toLogStr ws
     unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
