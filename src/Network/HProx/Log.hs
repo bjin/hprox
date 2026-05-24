@@ -4,11 +4,14 @@
 
 module Network.HProx.Log
   ( LogLevel(..)
+  , LogOutput(..)
   , LogStr
   , LogType'(..)
   , Logger
   , ToLogStr(..)
   , logLevelReader
+  , logOutputType
+  , parseLogOutput
   , withLogger
   ) where
 
@@ -32,6 +35,24 @@ logLevelReader "warn"  = Just WARN
 logLevelReader "error" = Just ERROR
 logLevelReader "none"  = Just NONE
 logLevelReader _       = Nothing
+
+data LogOutput = LogOutputNone
+               | LogOutputStdout
+               | LogOutputStderr
+               | LogOutputFile !FilePath
+  deriving (Show, Eq)
+
+parseLogOutput :: String -> LogOutput
+parseLogOutput "none"   = LogOutputNone
+parseLogOutput "stdout" = LogOutputStdout
+parseLogOutput "stderr" = LogOutputStderr
+parseLogOutput file     = LogOutputFile file
+
+logOutputType :: LogOutput -> LogType' LogStr
+logOutputType LogOutputNone        = LogNone
+logOutputType LogOutputStdout      = LogStdout 4096
+logOutputType LogOutputStderr      = LogStderr 4096
+logOutputType (LogOutputFile file) = LogFileNoRotate file 4096
 
 logWith :: TimedFastLogger -> LogLevel -> LogStr -> IO ()
 logWith logger level logstr = logger (\time -> toLogStr time <> " [" <> toLogStr (show level) <> "] " <> logstr <> "\n")

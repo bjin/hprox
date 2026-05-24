@@ -34,11 +34,6 @@ import Network.HProx.Runtime
 import Paths_hprox
 
 
-getLoggerType :: String -> LogType' LogStr
-getLoggerType "none"   = LogNone
-getLoggerType "stdout" = LogStdout 4096
-getLoggerType "stderr" = LogStderr 4096
-getLoggerType file     = LogFileNoRotate file 4096
 
 
 
@@ -46,7 +41,7 @@ getLoggerType file     = LogFileNoRotate file 4096
 run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
-run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger -> do
+run fallback conf@Config{..} = withLogger (logOutputType (parseLogOutput _log)) _loglevel $ \logger -> do
     logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
     allCerts <- loadTlsCredentials _ssl

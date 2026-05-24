@@ -57,6 +57,11 @@ spec = do
     it "rejects unknown log levels and different casing" $
       map logLevelReader ["", "warning", "INFO"] `shouldBe` replicate 3 Nothing
 
+  describe "parseLogOutput" $
+    it "preserves current log destination parsing policy" $
+      map parseLogOutput ["none", "stdout", "stderr", "hprox.log"]
+        `shouldBe` [LogOutputNone, LogOutputStdout, LogOutputStderr, LogOutputFile "hprox.log"]
+
   describe "splitBy" $ do
     it "preserves empty segments between, before, and after separators" $
       NE.toList (splitBy ':' ":a::b:") `shouldBe` ["", "a", "", "b", ""]
