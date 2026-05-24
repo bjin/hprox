@@ -135,6 +135,7 @@ tests:
     - crypton
     - data-default-class
     - dns
+    - directory
     - fast-logger
     - hspec
     - http-client
@@ -143,6 +144,7 @@ tests:
     - http-types
     - http2
     - optparse-applicative
+    - network
     - random
     - text
     - tls
