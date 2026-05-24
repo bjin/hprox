@@ -46,14 +46,28 @@ data Config = Config
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
-defaultConfig = Config Nothing 3000 [] Nothing Nothing [] Nothing False False "hprox" Nothing "stdout" INFO
+defaultConfig = Config
+  { _bind     = Nothing
+  , _port     = 3000
+  , _ssl      = []
+  , _auth     = Nothing
+  , _ws       = Nothing
+  , _rev      = []
+  , _doh      = Nothing
+  , _hide     = False
+  , _naive    = False
+  , _name     = "hprox"
+  , _acme     = Nothing
+  , _log      = "stdout"
+  , _loglevel = INFO
 #ifdef OS_UNIX
-  Nothing
-  Nothing
+  , _user     = Nothing
+  , _group    = Nothing
 #endif
 #ifdef QUIC_ENABLED
-    Nothing
+  , _quic     = Nothing
 #endif
+  }
 
 -- | Certificate file pairs
 data CertFile = CertFile

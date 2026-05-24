@@ -252,7 +252,16 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
     manager <- newTlsManager
 
     let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
-        pset = ProxySettings pauth (Just _name) _ws revSorted _hide (_naive && isSSL) _acme logger
+        pset = ProxySettings
+          { proxyAuth      = pauth
+          , passPrompt     = Just _name
+          , wsRemote       = _ws
+          , revRemoteMap   = revSorted
+          , hideProxyAuth  = _hide
+          , naivePadding   = _naive && isSSL
+          , acmeThumbprint = _acme
+          , logger         = logger
+          }
         proxy = healthCheckProvider $
                 acmeProvider pset $
                 (if isSSL then forceSSL pset else id) $
