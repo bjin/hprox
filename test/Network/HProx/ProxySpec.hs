@@ -10,12 +10,14 @@ import Data.ByteString.Base64     qualified as B64
 import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Data.IORef
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.Types         qualified as HT
 import Network.HTTP.Types.Header  qualified as HT
 import Network.Wai
 import Network.Wai.Handler.Warp   qualified as Warp
 import Network.Wai.Test
+import System.Log.FastLogger      qualified as FL
 
 import Network.HProx.Impl
 
@@ -28,6 +30,37 @@ spec = do
       response <- runProxyApp (httpProxy authRequiredSettings) rawProxyRequest
       simpleStatus response `shouldBe` HT.status407
       lookup "Proxy-Authenticate" (simpleHeaders response) `shouldBe` Just "Basic realm=\"hprox\""
+
+    it "accepts valid Basic credentials" $
+      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+        response <- runProxyApp (httpProxy authorizedSettings) (proxyRequestForPort port basicAliceSecret)
+        simpleStatus response `shouldBe` HT.status200
+
+    it "rejects valid Basic credentials with the wrong password" $ do
+      response <- runProxyApp (httpProxy authorizedSettings) (rawProxyRequestWithAuth $ basicCredential "alice:wrong")
+      simpleStatus response `shouldBe` HT.status407
+
+    it "rejects malformed base64 credentials even if lenient decoding would authenticate" $ do
+      response <- runProxyApp (httpProxy authorizedSettings) (rawProxyRequestWithAuth "Basic !!!YWxpY2U6c2VjcmV0!!!")
+      simpleStatus response `shouldBe` HT.status407
+
+    it "rejects non-Basic credentials even when the payload is otherwise valid" $ do
+      response <- runProxyApp (httpProxy authorizedSettings) (rawProxyRequestWithAuth $ "Bearer " <> B64.encode "alice:secret")
+      simpleStatus response `shouldBe` HT.status407
+
+    it "redacts proxy auth passwords in trace logs" $
+      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+        logs <- newIORef []
+        let loggingSettings = authorizedSettings
+              { logger = \_ msg -> modifyIORef' logs (LBS.fromStrict (FL.fromLogStr msg) :)
+              }
+        response <- runProxyApp (httpProxy loggingSettings) (proxyRequestForPort port basicAliceSecret)
+        simpleStatus response `shouldBe` HT.status200
+        renderedLogs <- LBS.toStrict . LBS.concat . reverse <$> readIORef logs
+        renderedLogs `shouldSatisfy` BS8.isInfixOf "authorized request"
+        renderedLogs `shouldSatisfy` BS8.isInfixOf "alice:<redacted>"
+        renderedLogs `shouldNotSatisfy` BS8.isInfixOf "secret"
+        renderedLogs `shouldNotSatisfy` BS8.isInfixOf "alice:secret"
 
     it "falls back instead of challenging when hidden auth is enabled" $ do
       response <- runProxyApp (httpProxy hiddenAuthSettings) rawProxyRequest
@@ -144,6 +177,25 @@ rawProxyRequest = defaultRequest
   , rawPathInfo = "http://example.com/resource"
   , requestHeaderHost = Just "example.com"
   }
+
+rawProxyRequestWithAuth :: BS8.ByteString -> Request
+rawProxyRequestWithAuth auth = rawProxyRequest
+  { requestHeaders = [(HT.hProxyAuthorization, auth)]
+  }
+
+proxyRequestForPort :: Int -> BS8.ByteString -> Request
+proxyRequestForPort port auth =
+  let authority = "127.0.0.1:" <> BS8.pack (show port)
+  in (rawProxyRequestWithAuth auth)
+       { rawPathInfo = "http://" <> authority <> "/resource"
+       , requestHeaderHost = Just authority
+       }
+
+basicAliceSecret :: BS8.ByteString
+basicAliceSecret = basicCredential "alice:secret"
+
+basicCredential :: BS8.ByteString -> BS8.ByteString
+basicCredential credential = "Basic " <> B64.encode credential
 
 hostHeaderProxyRequest :: Request
 hostHeaderProxyRequest = defaultRequest

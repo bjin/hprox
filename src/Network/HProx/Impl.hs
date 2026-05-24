@@ -26,7 +26,7 @@ import Control.Monad              (forM_, unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
 import Data.Binary.Builder        qualified as BB
 import Data.ByteString            qualified as BS
-import Data.ByteString.Base64     (decodeLenient)
+import Data.ByteString.Base64     qualified as B64
 import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
@@ -118,15 +118,31 @@ checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
   (_, Nothing) -> return False
 
   (Just check, Just provided) -> do
-    let decoded = decodeLenient $ snd $ BS8.spanEnd (/=' ') provided
-        authorized = check decoded
+    let decoded = parseBasicProxyAuthorization provided
+        authorized = maybe False check decoded
         authMsg = if authorized then "authorized" else "unauthorized"
-        logMsg = authMsg <> " request (credential: " <> toLogStr decoded <> ") from "
+        logMsg = authMsg <> " request (credential: " <> toLogStr (redactedCredential decoded) <> ") from "
                          <> toLogStr (show (remoteHost req))
     logger TRACE logMsg
     return authorized
   where
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
+
+parseBasicProxyAuthorization :: BS.ByteString -> Maybe BS.ByteString
+parseBasicProxyAuthorization authHeader =
+  case BS8.words authHeader of
+    [scheme, payload]
+      | CI.mk scheme == ("basic" :: CI.CI BS.ByteString) ->
+          either (const Nothing) Just (B64.decode payload)
+    _ -> Nothing
+
+redactedCredential :: Maybe BS.ByteString -> BS.ByteString
+redactedCredential Nothing = "<invalid>"
+redactedCredential (Just decoded) =
+  case BS8.break (== ':') decoded of
+    (username, password)
+      | not (BS.null password) -> BS.concat [username, ":<redacted>"]
+    _ -> "<invalid>"
 
 parseConnectProxy :: Request -> Maybe (BS.ByteString, Int)
 parseConnectProxy req

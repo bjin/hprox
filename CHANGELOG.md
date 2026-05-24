@@ -19,6 +19,10 @@
 - Replaced the Argon2 password-hash `error` path with a typed `PasswordHashError` thrown at the IO boundary.
 - Normalized HTTP proxy forwarding authority to render Host from the parsed URI and omit default `:80`
 - Stripped inbound Host and proxy-boundary headers (including `Forwarded`) when forwarding proxied HTTP requests
+- Enforced strict `Proxy-Authorization` parsing for HTTP proxy authentication: only `Basic` credentials with valid base64 decode are accepted now
+
+### Security
+- Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
 ## 0.6.5
 
 - bump stack dependencies
