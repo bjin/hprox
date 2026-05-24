@@ -60,7 +60,7 @@ handleDoH lookupRaw req respond = do
       Just DoHRequest{..} -> do
         resp <- lookupRaw dohQuestion
         respond $ case resp of
-          Left _    -> errorResp
+          Left _    -> resolverErrorResp
           Right msg -> encodeDoHResponse dohIdentifier msg
 
 parseDoHRequest :: Request -> IO (Maybe DoHRequest)
@@ -71,10 +71,14 @@ parseDoHRequestWithBodyReader readChunk req
     | requestMethod req == "GET",
       [("dns", Just dnsStr)] <- queryString req =
         return $ decodeDoHQuery =<< either (const Nothing) Just (Base64.decodeUnpadded dnsStr)
-    | requestMethod req == "POST",
-      KnownLength len <- requestBodyLength req,
-      len <= fromIntegral maxPostBodyLength =
-        decodeDoHQuery <$> readRequestBody readChunk (fromIntegral len)
+    | requestMethod req == "POST" =
+        case requestBodyLength req of
+          KnownLength len
+            | len <= fromIntegral maxPostBodyLength ->
+                decodeDoHQuery <$> readRequestBody readChunk (fromIntegral len)
+          ChunkedBody ->
+            decodeDoHQuery <$> readChunkedRequestBody readChunk maxPostBodyLength
+          _otherwise -> return Nothing
     | otherwise = return Nothing
 
 readRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
@@ -90,6 +94,19 @@ readRequestBody readChunk expectedLength = go expectedLength []
               let (accepted, _extra) = BS.splitAt remaining chunk
                   nextRemaining = remaining - BS.length accepted
               go nextRemaining (accepted : chunks)
+
+readChunkedRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
+readChunkedRequestBody readChunk maxLength = go 0 []
+  where
+    go total chunks = do
+      chunk <- readChunk
+      if BS.null chunk
+        then return $ BS.concat $ reverse chunks
+        else do
+          let nextTotal = total + BS.length chunk
+          if nextTotal > maxLength
+            then return ""
+            else go nextTotal (chunk : chunks)
 
 decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
 decodeDoHQuery dnsQuery =
@@ -110,3 +127,6 @@ encodeDoHResponse ident dnsResp@DNSMessage{header = header} =
 
 errorResp :: Response
 errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"
+
+resolverErrorResp :: Response
+resolverErrorResp = responseLBS HT.status502 [("Content-Type", "text/plain")] "dns resolver failure"

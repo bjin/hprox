@@ -31,6 +31,9 @@
 - Compared reverse-route hostnames case-insensitively after stripping ports
 - Preserved `forceSSL` HTTPS redirect targets for origin-form requests by keeping request path and query; for absolute-form proxy requests the redirect now uses the parsed target and omits default `:80`/`:443` ports while preserving non-default ports
 - Updated CONNECT handling to establish upstream TCP before returning 200 OK and return 502 on connect failures for HTTP/1 and HTTP/2
+- Differentiated DNS resolver failures in DoH by returning HTTP 502 (Bad Gateway) with `dns resolver failure` instead of reusing the malformed-request 400 response
+- Rejected chunked DoH POST bodies that exceed the 4096-byte limit with HTTP 400 malformed-request handling
+- Preserved malformed client input handling on HTTP 400 while adding successful chunked POST parsing support within existing size bounds
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged

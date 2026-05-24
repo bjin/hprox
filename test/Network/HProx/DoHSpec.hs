@@ -45,6 +45,22 @@ spec =
       simpleStatus response `shouldBe` HT.status400
       simpleBody response `shouldBe` "invalid dns-over-https request"
 
+    it "accepts chunked POST bodies within the size boundary" $ do
+      response <- runDoHRequestWithBody postDnsRequest { requestBodyLength = ChunkedBody } (LBS.fromStrict encodedQuery)
+      simpleStatus response `shouldBe` HT.status200
+      lookup "Content-Type" (simpleHeaders response) `shouldBe` Just "application/dns-message"
+      decodedResponse response `shouldSatisfy` hasRequestIdentifier
+
+    it "rejects chunked POST bodies beyond the size boundary" $ do
+      response <- runDoHRequestWithBody postDnsRequest { requestBodyLength = ChunkedBody } (LBS.replicate 4097 0)
+      simpleStatus response `shouldBe` HT.status400
+      simpleBody response `shouldBe` "invalid dns-over-https request"
+
+    it "returns 502 when the DNS resolver fails" $ do
+      response <- runDoHRequestWithApplication resolverFailureApplication getDnsRequest ""
+      simpleStatus response `shouldBe` HT.status502
+      simpleBody response `shouldBe` "dns resolver failure"
+
     it "parses valid POST bodies split across multiple chunks" $ do
       chunks <- newIORef [BS.take 5 encodedQuery, BS.drop 5 encodedQuery]
       parsed <- parseDoHRequestWithBodyReader (popChunk chunks) postDnsRequest
@@ -71,6 +87,9 @@ runDoHRequest req = runDoHRequestWithBody req requestBody
 runDoHRequestWithBody :: Request -> LBS.ByteString -> IO SResponse
 runDoHRequestWithBody req body = runSession (srequest $ SRequest req body) testApplication
 
+runDoHRequestWithApplication :: Application -> Request -> LBS.ByteString -> IO SResponse
+runDoHRequestWithApplication app req body = runSession (srequest $ SRequest req body) app
+
 popChunk :: IORef [BS.ByteString] -> IO BS.ByteString
 popChunk chunksRef = do
   chunks <- readIORef chunksRef
@@ -85,6 +104,12 @@ testApplication = dnsOverHTTPSWithLookup lookupResponse fallback
 
 lookupResponse :: DNS.Question -> IO (Either DNS.DNSError DNS.DNSMessage)
 lookupResponse lookupQuestion = return $ Right (DNS.makeResponse responseIdentifier lookupQuestion [])
+
+resolverFailureApplication :: Application
+resolverFailureApplication = dnsOverHTTPSWithLookup lookupFailure fallback
+
+lookupFailure :: DNS.Question -> IO (Either DNS.DNSError DNS.DNSMessage)
+lookupFailure _ = return $ Left (error "unused resolver error")
 
 fallback :: Application
 fallback _req respond = respond $ responseLBS fallbackStatus [("Content-Type", "text/plain")] fallbackBody
