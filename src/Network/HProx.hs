@@ -17,14 +17,11 @@ module Network.HProx
   , run
   ) where
 
+import Control.Monad              (forM_, unless, when)
 import Data.Version               (showVersion)
 import Network.HTTP.Client.TLS    (newTlsManager)
 import Network.TLS.SessionManager qualified as SM
 import Network.Wai                (Application)
-
-
-
-import Control.Monad
 
 import Network.HProx.Auth
 import Network.HProx.Config
@@ -32,10 +29,6 @@ import Network.HProx.Log
 import Network.HProx.Platform.Unix
 import Network.HProx.Runtime
 import Paths_hprox
-
-
-
-
 
 -- | Run HProx in front of fallback 'Application', with specified 'Config'
 run :: Application -- ^ fallback application
@@ -75,7 +68,6 @@ run fallback conf@Config{..} =
             when dropped $ logger INFO "root priviledge dropped"
 #endif
 #endif
-
 
     pauth <- loadProxyAuth logger _auth
 
