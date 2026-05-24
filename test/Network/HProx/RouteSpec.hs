@@ -13,13 +13,15 @@ import Test.Hspec
 spec :: Spec
 spec =
   describe "ReverseRoute" $ do
-    it "converts from the public Config reverse-route tuple shape" $
+    it "converts and normalizes from the public Config reverse-route tuple shape" $ do
       fromReverseRouteTuple (Just "example.com", "/api/", "backend:80")
         `shouldBe` ReverseRoute
           { routeHost = Just "example.com"
-          , routePrefix = "/api/"
+          , routePrefix = "/api"
           , routeUpstream = "backend:80"
           }
+      routePrefix (fromReverseRouteTuple (Nothing, "api", "backend:80")) `shouldBe` "/api"
+      routePrefix (fromReverseRouteTuple (Nothing, "/", "backend:80")) `shouldBe` "/"
 
     it "sorts domain-specific routes before catch-all routes and longer prefixes first" $ do
       let catchAllLong = ReverseRoute Nothing "/longer/" "catch-long:80"
@@ -34,23 +36,26 @@ spec =
       hostMatches route Nothing `shouldBe` True
       hostMatches route (Just "example.com") `shouldBe` True
 
-    it "matches host-specific routes only against the same host" $ do
+    it "matches host-specific routes case-insensitively" $ do
       let route = ReverseRoute (Just "example.com") "/" "backend:80"
       hostMatches route Nothing `shouldBe` False
       hostMatches route (Just "example.com") `shouldBe` True
+      hostMatches route (Just "EXAMPLE.com") `shouldBe` True
       hostMatches route (Just "other.example") `shouldBe` False
 
-    it "matches prefixes using the current raw ByteString prefix policy" $ do
+    it "matches prefixes on path boundaries" $ do
       let route = ReverseRoute Nothing "/api" "backend:80"
       prefixMatches route "/api" `shouldBe` True
       prefixMatches route "/api/v1" `shouldBe` True
+      prefixMatches route "/apiary" `shouldBe` False
+      prefixMatches route "/apix" `shouldBe` False
       prefixMatches route "/other" `shouldBe` False
 
     it "finds the first matching route after current route sorting" $ do
       let catchAll = ReverseRoute Nothing "/api/" "catch-all:80"
           shorterHost = ReverseRoute (Just "example.com") "/" "shorter-host:80"
           longerHost = ReverseRoute (Just "example.com") "/api/" "longer-host:80"
-      findMatchingRoute [catchAll, shorterHost, longerHost] (Just "example.com:8080") "/api/users"
+      findMatchingRoute [catchAll, shorterHost, longerHost] (Just "EXAMPLE.com:8080") "/api/users"
         `shouldBe` Just longerHost
 
     it "uses hostless routes for any request host when no host-specific route matches" $ do
@@ -63,15 +68,14 @@ spec =
       let route = ReverseRoute (Just "example.com") "/api/" "host:80"
       findMatchingRoute [route] Nothing "/api/users" `shouldBe` Nothing
 
-    it "rewrites raw paths by dropping the configured prefix but preserving one slash" $ do
-      let route = ReverseRoute Nothing "/api/" "backend:80"
-          rewrite = rewriteReverseProxyRequest route [] "/api/users"
-      rewriteRawPath rewrite `shouldBe` "/users"
-
-    it "applies the current drop-based raw-path rewrite even if the route prefix is not present" $ do
-      let route = ReverseRoute Nothing "/api/" "backend:80"
-          rewrite = rewriteReverseProxyRequest route [] "/other"
-      rewriteRawPath rewrite `shouldBe` "er"
+    it "rewrites raw paths using normalized prefix boundaries" $ do
+      let route = fromReverseRouteTuple (Nothing, "/api", "backend:80")
+          exactRewrite = rewriteReverseProxyRequest route [] "/api"
+          nestedRewrite = rewriteReverseProxyRequest route [] "/api/users"
+          unmatchedRewrite = rewriteReverseProxyRequest route [] "/other"
+      rewriteRawPath exactRewrite `shouldBe` "/"
+      rewriteRawPath nestedRewrite `shouldBe` "/users"
+      rewriteRawPath unmatchedRewrite `shouldBe` "/other"
 
     it "selects secure upstream behavior only for port 443" $ do
       let secure = rewriteReverseProxyRequest (ReverseRoute Nothing "/" "secure.example:443") [] "/"

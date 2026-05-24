@@ -40,7 +40,7 @@ spec = do
         } `shouldBe` RuntimeConfig
           { runtimeConfigLogOutput = LogOutputStderr
           , runtimeConfigReverseRoutes =
-              [ ReverseRoute (Just "example.com") "/api/" "api:443"
+              [ ReverseRoute (Just "example.com") "/api" "api:443"
               , ReverseRoute Nothing "/" "catch:80"
               ]
           , runtimeConfigReverseRouteTuples =

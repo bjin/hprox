@@ -14,6 +14,7 @@ module Network.HProx.Route
   ) where
 
 import Data.ByteString.Char8     qualified as BS8
+import Data.CaseInsensitive      qualified as CI
 import Data.List                 (sortOn)
 import Data.Maybe                (isJust, listToMaybe)
 import Data.Ord                  (Down(..))
@@ -44,7 +45,7 @@ data ReverseProxyRewrite = ReverseProxyRewrite
 fromReverseRouteTuple :: (Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString) -> ReverseRoute
 fromReverseRouteTuple (host, prefix, upstream) = ReverseRoute
   { routeHost     = host
-  , routePrefix   = prefix
+  , routePrefix   = normalizeRoutePrefix prefix
   , routeUpstream = upstream
   }
 
@@ -54,10 +55,18 @@ sortReverseRoutes = sortOn $ \ReverseRoute{..} -> Down (isJust routeHost, BS8.le
 hostMatches :: ReverseRoute -> Maybe BS8.ByteString -> Bool
 hostMatches ReverseRoute{ routeHost = Nothing } _               = True
 hostMatches ReverseRoute{ routeHost = Just _ } Nothing          = False
-hostMatches ReverseRoute{ routeHost = Just domain } (Just host) = domain == host
+hostMatches ReverseRoute{ routeHost = Just domain } (Just host) = CI.mk domain == CI.mk host
 
 prefixMatches :: ReverseRoute -> BS8.ByteString -> Bool
-prefixMatches ReverseRoute{..} rawPath = routePrefix `BS8.isPrefixOf` rawPath
+prefixMatches ReverseRoute{..} rawPath
+  | prefix == "/" = True
+  | rawPath == prefix = True
+  | otherwise = prefix `BS8.isPrefixOf` rawPath
+    && BS8.length rawPath > prefixLength
+    && BS8.index rawPath prefixLength == '/'
+  where
+    prefix = normalizeRoutePrefix routePrefix
+    prefixLength = BS8.length prefix
 
 findMatchingRoute :: [ReverseRoute] -> Maybe BS8.ByteString -> BS8.ByteString -> Maybe ReverseRoute
 findMatchingRoute routes requestHost rawPath =
@@ -69,10 +78,23 @@ findMatchingRoute routes requestHost rawPath =
 hostOnly :: BS8.ByteString -> BS8.ByteString
 hostOnly host = maybe host fst (parseHostPort host)
 
+normalizeRoutePrefix :: BS8.ByteString -> BS8.ByteString
+normalizeRoutePrefix prefix
+  | BS8.null prefix = "/"
+  | otherwise = stripTrailingSlash prefixed
+  where
+    prefixed
+      | "/" `BS8.isPrefixOf` prefix = prefix
+      | otherwise = "/" <> prefix
+
+    stripTrailingSlash value
+      | BS8.length value > 1 && "/" `BS8.isSuffixOf` value = stripTrailingSlash (BS8.init value)
+      | otherwise = value
+
 rewriteReverseProxyRequest :: ReverseRoute -> RequestHeaders -> BS8.ByteString -> ReverseProxyRewrite
 rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = ReverseProxyRewrite
   { rewriteRoute       = route
-  , rewriteRawPath     = BS8.drop (BS8.length routePrefix - 1) rawPath
+  , rewriteRawPath     = rewritePath route rawPath
   , rewriteHeaders     = (HT.hHost, upstreamHost) : filter keepHeader requestHeaders
   , rewriteRequestHost = Just upstreamHost
   , rewriteUpstream    = upstreamHost
@@ -84,3 +106,18 @@ rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = Rever
 
     keepHeader (name, _) = not (isProxyStripHeader name) && name /= HT.hHost
 
+rewritePath :: ReverseRoute -> BS8.ByteString -> BS8.ByteString
+rewritePath route@ReverseRoute{..} rawPath
+  | not (prefixMatches route rawPath) = rawPath
+  | prefix == "/" = ensureLeadingSlash rawPath
+  | otherwise =
+      case BS8.drop (BS8.length prefix) rawPath of
+        ""   -> "/"
+        rest -> ensureLeadingSlash rest
+  where
+    prefix = normalizeRoutePrefix routePrefix
+
+ensureLeadingSlash :: BS8.ByteString -> BS8.ByteString
+ensureLeadingSlash path
+  | "/" `BS8.isPrefixOf` path = path
+  | otherwise = "/" <> path

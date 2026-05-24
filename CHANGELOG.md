@@ -13,6 +13,7 @@
 - Named naiveproxy padding protocol constants and added deterministic parser/round-trip coverage.
 - Updated copyright notices to 2026 in LICENSE, package metadata, and all touched source/test headers
 - Hardened auth-file handling by stripping one trailing carriage return from each entry before parsing, hashing, and rewrite decisions
+- Normalized reverse route host/path matching behavior is now stricter and more tolerant of case in host names
 
 ### Fixed
 - Removed avoidable partial functions in reverse-proxy host parsing and HTTP/WebSocket proxy target selection.
@@ -24,6 +25,10 @@
 - Ensured malformed auth-file warnings redact raw line contents and report line numbers with optional username context
 - Added tests covering CRLF plaintext auth-file verification/rewrite and malformed-line log redaction
 - Added bounded validation for `--port` and `--quic`, including `Config` runtime validation for direct values, and tightened `--rev` route parsing to reject empty upstream/domain components before startup
+- Normalized reverse-route prefixes from config tuples to canonical leading-slash form without trailing slash
+- Made reverse route prefix matching boundary-aware so /api matches /api/v1 but not /apiary or /apix
+- Made reverse proxy path rewrites preserve unmatched paths and handle exact and nested matches consistently
+- Compared reverse-route hostnames case-insensitively after stripping ports
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
