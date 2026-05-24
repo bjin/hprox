@@ -27,7 +27,7 @@ drop-packages:
 flags:
   hprox:
     quic: true
-apply-ghc-options: everything
+apply-ghc-options: locals
 nix:
   packages:
   - libcap

@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Added
+- Added a minimal `hprox-test` Hspec smoke suite target and `test/Spec.hs` entrypoint to the package test configuration
+
+### Changed
+- Corrected `extra-source-files` to reference `CHANGELOG.md` and scoped Stack GHC flags to local packages only
+
 ## 0.6.5
 
 - bump stack dependencies

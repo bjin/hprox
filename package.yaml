@@ -14,7 +14,7 @@ description:
 
 extra-source-files:
 - README.md
-- Changelog.md
+- CHANGELOG.md
 
 flags:
   static:
@@ -104,3 +104,16 @@ executables:
     - hprox
     - http-types
     - wai
+
+tests:
+  hprox-test:
+    main: Spec.hs
+    source-dirs:
+    - test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - hspec
