@@ -6,6 +6,9 @@ module Network.HProx.ProxySpec
   ( spec
   ) where
 
+import Control.Concurrent.Async   (withAsync)
+import Control.Exception          (bracket)
+import Control.Monad              (unless)
 import Data.ByteString.Base64     qualified as B64
 import Data.ByteString.Char8      qualified as BS8
 import Data.ByteString.Lazy       qualified as LBS
@@ -14,6 +17,8 @@ import Data.IORef
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.Types         qualified as HT
 import Network.HTTP.Types.Header  qualified as HT
+import Network.Socket
+import Network.Socket.ByteString  qualified as SocketBS
 import Network.Wai
 import Network.Wai.Handler.Warp   qualified as Warp
 import Network.Wai.Test
@@ -77,6 +82,21 @@ spec = do
       response <- runConnectApp hiddenAuthSettings connectRequest
       simpleStatus response `shouldBe` fallbackStatus
       simpleBody response `shouldBe` fallbackBody
+
+    it "establishes an HTTP/1 CONNECT tunnel after upstream connection succeeds" $
+      withTcpEchoServer $ \targetPort ->
+        Warp.testWithApplication (pure $ httpConnectProxy authorizedSettings fallback) $ \proxyPort -> do
+          response <- rawConnectRoundTrip proxyPort targetPort
+          response `shouldBe` "ping"
+    it "returns 502 when upstream CONNECT fails before tunnel establishment" $ do
+      port <- getFreePort
+      response <- runConnectApp authorizedSettings (connectRequestFor "127.0.0.1" port HT.http11)
+      simpleStatus response `shouldBe` HT.status502
+
+    it "returns 502 for HTTP/2 CONNECT when upstream connection fails" $ do
+      port <- getFreePort
+      response <- runConnectApp authorizedSettings (connectRequestFor "127.0.0.1" port HT.http20)
+      simpleStatus response `shouldBe` HT.status502
 
   describe "HTTP proxy fallback decisions" $
     it "falls through for non-proxy GET requests" $ do
@@ -221,6 +241,71 @@ connectRequest = defaultRequest
   , rawPathInfo = "example.com:443"
   , requestHeaderHost = Just "example.com:443"
   }
+
+connectRequestFor :: BS8.ByteString -> Int -> HT.HttpVersion -> Request
+connectRequestFor host port version =
+  let authority = host <> ":" <> BS8.pack (show port)
+  in connectRequest
+       { rawPathInfo = authority
+       , requestHeaderHost = Just authority
+       , requestHeaders = [(HT.hProxyAuthorization, basicAliceSecret)]
+       , httpVersion = version
+       }
+
+getFreePort :: IO Int
+getFreePort = bracket open close socketPortInt
+  where
+    open = do
+      sock <- socket AF_INET Stream defaultProtocol
+      setSocketOption sock ReuseAddr 1
+      bind sock (SockAddrInet 0 loopbackAddress)
+      return sock
+
+    socketPortInt sock = fromIntegral <$> socketPort sock
+
+withTcpEchoServer :: (Int -> IO a) -> IO a
+withTcpEchoServer action = bracket open close run
+  where
+    open = do
+      sock <- socket AF_INET Stream defaultProtocol
+      setSocketOption sock ReuseAddr 1
+      bind sock (SockAddrInet 0 loopbackAddress)
+      listen sock 1
+      return sock
+
+    run sock =
+      withAsync (bracket (fst <$> accept sock) close echoLoop) $ \_ ->
+        action . fromIntegral =<< socketPort sock
+
+    echoLoop conn = do
+      bs <- SocketBS.recv conn 4096
+      unless (BS8.null bs) $ do
+        SocketBS.sendAll conn bs
+        echoLoop conn
+
+rawConnectRoundTrip :: Int -> Int -> IO BS8.ByteString
+rawConnectRoundTrip proxyPort targetPort = bracket open close $ \sock -> do
+  SocketBS.sendAll sock $ BS8.concat
+    [ "CONNECT 127.0.0.1:"
+    , BS8.pack (show targetPort)
+    , " HTTP/1.1\r\nHost: 127.0.0.1:"
+    , BS8.pack (show targetPort)
+    , "\r\nProxy-Authorization: "
+    , basicAliceSecret
+    , "\r\n\r\n"
+    ]
+  response <- SocketBS.recv sock 4096
+  response `shouldSatisfy` BS8.isPrefixOf "HTTP/1.1 200"
+  SocketBS.sendAll sock "ping"
+  SocketBS.recv sock 4096
+  where
+    open = do
+      sock <- socket AF_INET Stream defaultProtocol
+      connect sock (SockAddrInet (fromIntegral proxyPort) loopbackAddress)
+      return sock
+
+loopbackAddress :: HostAddress
+loopbackAddress = tupleToHostAddress (127, 0, 0, 1)
 
 fallback :: Application
 fallback _req respond = respond $ responseLBS fallbackStatus [("Content-Type", "text/plain")] fallbackBody

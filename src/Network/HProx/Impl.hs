@@ -341,7 +341,12 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
       forM_ mPaddingType $ \paddingType ->
         logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
                        " for " <> logRequest req
-      respondResponse
+      connected <- tryAndCatchAll $ CN.runTCPClient settings respondResponse
+      case connected of
+        Right received -> return received
+        Left ex        -> do
+          logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
+          respond connectFailureResponse
     else if hideProxyAuth
            then do
              logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
@@ -354,6 +359,9 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
 
     backup = responseKnownLength HT.status500 [("Content-Type", "text/plain")]
         "HTTP CONNECT tunneling detected, but server does not support responseRaw"
+
+    connectFailureResponse = responseKnownLength HT.status502 [("Content-Type", "text/plain")]
+        "CONNECT upstream connection failed"
 
     tryAndCatchAll :: IO a -> IO (Either SomeException a)
     tryAndCatchAll = try
@@ -371,15 +379,15 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
 
     mPaddingType = if naivePadding then parseRequestForPadding req else Nothing
 
-    respondResponse
-        | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect True) backup
+    respondResponse server
+        | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect server True) backup
         | otherwise                          = do
             paddingHeaders <- liftIO $ prepareResponseForPadding mPaddingType
             respond $ responseStream HT.status200 paddingHeaders streaming
       where
         streaming write flush = do
             flush
-            handleConnect False (getRequestBodyChunk req) (\bs -> write (BB.fromByteString bs) >> flush)
+            handleConnect server False (getRequestBodyChunk req) (\bs -> write (BB.fromByteString bs) >> flush)
 
     yieldHttp1Response = do
         paddingHeaders <- liftIO $ prepareResponseForPadding mPaddingType
@@ -388,8 +396,8 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
                       ]
         yield $ LBS.toStrict $ BB.toLazyByteString ("HTTP/1.1 200 OK\r\n" <> mconcat headers <> "\r\n")
 
-    handleConnect :: Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
-    handleConnect http1 fromClient' toClient' = CN.runTCPClient settings $ \server ->
+    handleConnect :: CN.AppData -> Bool -> IO BS.ByteString -> (BS.ByteString -> IO ()) -> IO ()
+    handleConnect server http1 fromClient' toClient' =
         let toServer = CN.appSink server
             fromServer = CN.appSource server
             fromClient = do

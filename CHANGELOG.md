@@ -30,6 +30,7 @@
 - Made reverse proxy path rewrites preserve unmatched paths and handle exact and nested matches consistently
 - Compared reverse-route hostnames case-insensitively after stripping ports
 - Preserved `forceSSL` HTTPS redirect targets for origin-form requests by keeping request path and query; for absolute-form proxy requests the redirect now uses the parsed target and omits default `:80`/`:443` ports while preserving non-default ports
+- Updated CONNECT handling to establish upstream TCP before returning 200 OK and return 502 on connect failures for HTTP/1 and HTTP/2
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged
