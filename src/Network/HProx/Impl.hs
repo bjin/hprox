@@ -4,7 +4,8 @@
 
 {-# LANGUAGE ViewPatterns #-}
 module Network.HProx.Impl
-  ( ProxySettings(..)
+  ( HttpProxyTarget(..)
+  , ProxySettings(..)
   , acmeProvider
   , forceSSL
   , healthCheckProvider
@@ -14,6 +15,7 @@ module Network.HProx.Impl
   , logRequest
   , pacProvider
   , reverseProxy
+  , selectHttpProxyTarget
   ) where
 
 import Control.Applicative        ((<|>))
@@ -58,6 +60,13 @@ data ProxySettings = ProxySettings
   , acmeThumbprint :: !(Maybe BS.ByteString)
   , logger         :: !Logger
   }
+
+data HttpProxyTarget = HttpProxyTarget
+  { httpProxyTargetHost    :: !BS.ByteString
+  , httpProxyTargetPort    :: !Int
+  , httpProxyTargetRawPath :: !BS.ByteString
+  }
+  deriving (Eq, Show)
 
 logRequest :: Request -> LogStr
 logRequest req = toLogStr (requestMethod req) <>
@@ -201,6 +210,48 @@ reverseProxy ProxySettings{..} mgr fallback =
            then WPRModifiedRequestSecure nreq dest
            else WPRModifiedRequest nreq dest
 
+selectHttpProxyTarget :: Request -> Maybe HttpProxyTarget
+selectHttpProxyTarget req
+    | requestMethod req == "CONNECT" = Nothing
+    | isRawPathProxy = do
+        (host, port) <- parseProxyHostPortWithDefault defaultPort hostPortP
+        return HttpProxyTarget
+          { httpProxyTargetHost = host
+          , httpProxyTargetPort = port
+          , httpProxyTargetRawPath = newRawPathP
+          }
+    | isHTTP2Proxy || hasProxyHeader = do
+        hostPort <- requestHeaderHost req
+        (host, port) <- parseProxyHostPortWithDefault defaultPort hostPort
+        return HttpProxyTarget
+          { httpProxyTargetHost = host
+          , httpProxyTargetPort = port
+          , httpProxyTargetRawPath = rawPath
+          }
+    | otherwise = Nothing
+  where
+    rawPath = rawPathInfo req
+    rawPathPrefix = "http://"
+    defaultPort = 80
+
+    isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
+    hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
+    scheme = lookup "X-Scheme" (requestHeaders req)
+    isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
+
+    (hostPortP, newRawPathP) = BS8.span (/='/') $
+        BS.drop (BS.length rawPathPrefix) rawPath
+
+parseProxyHostPortWithDefault :: Int -> BS.ByteString -> Maybe (BS.ByteString, Int)
+parseProxyHostPortWithDefault defaultPort hostPort
+    | Just parsed <- parseHostPort hostPort = Just parsed
+    | BS.null hostPort = Nothing
+    | hasColon && not isBracketedHost = Nothing
+    | otherwise = Just (hostPort, defaultPort)
+  where
+    hasColon = 58 `BS.elem` hostPort -- ':'
+    isBracketedHost = "[" `BS.isPrefixOf` hostPort && "]" `BS.isSuffixOf` hostPort
+
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
 httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyResponseFor settings mgr
   where
@@ -208,10 +259,12 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
 
     proxyResponseFor req
         | Just (wsDest, wsWrapper) <- websocketTarget = return $ wsWrapper wsDest
-        | Just ((host, port), newRawPath) <- proxyTarget = do
+        | Just HttpProxyTarget{..} <- selectHttpProxyTarget req = do
             authorized <- checkAuth pset req
             if authorized
-              then return $ WPRModifiedRequest (proxiedRequest newRawPath) (ProxyDest host port)
+              then return $ WPRModifiedRequest
+                (proxiedRequest httpProxyTargetRawPath)
+                (ProxyDest httpProxyTargetHost httpProxyTargetPort)
               else if hideProxyAuth
                      then do
                        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
@@ -228,26 +281,6 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
           if wpsUpgradeToRaw defaultWaiProxySettings req
             then Just (ProxyDest wsHost wsPort, wsWrapper)
             else Nothing
-
-        notCONNECT = requestMethod req /= "CONNECT"
-        rawPath = rawPathInfo req
-        rawPathPrefix = "http://"
-        defaultPort = 80
-        hostHeader = parseHostPortWithDefault defaultPort <$> requestHeaderHost req
-
-        isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
-        hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
-        scheme = lookup "X-Scheme" (requestHeaders req)
-        isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
-
-        proxyTarget
-            | not notCONNECT = Nothing
-            | isRawPathProxy = Just (parseHostPortWithDefault defaultPort hostPortP, newRawPathP)
-            | isHTTP2Proxy || hasProxyHeader = fmap (\host -> (host, rawPath)) hostHeader
-            | otherwise = Nothing
-          where
-            (hostPortP, newRawPathP) = BS8.span (/='/') $
-                BS.drop (BS.length rawPathPrefix) rawPath
 
         proxiedRequest newRawPath = req
           { rawPathInfo = newRawPath

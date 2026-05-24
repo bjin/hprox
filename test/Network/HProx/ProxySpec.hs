@@ -44,7 +44,37 @@ spec = do
       simpleStatus response `shouldBe` fallbackStatus
       simpleBody response `shouldBe` fallbackBody
 
+
+  describe "HTTP proxy target parsing" $ do
+    it "selects raw absolute-URI proxy targets with default ports" $
+      selectHttpProxyTarget rawProxyRequest
+        `shouldBe` Just HttpProxyTarget
+          { httpProxyTargetHost = "example.com"
+          , httpProxyTargetPort = 80
+          , httpProxyTargetRawPath = "/resource"
+          }
+
+    it "preserves bracketed IPv6 proxy targets without explicit ports" $
+      selectHttpProxyTarget rawProxyRequest { rawPathInfo = "http://[::1]/resource" }
+        `shouldBe` Just HttpProxyTarget
+          { httpProxyTargetHost = "[::1]"
+          , httpProxyTargetPort = 80
+          , httpProxyTargetRawPath = "/resource"
+          }
+
+    it "rejects malformed explicit ports in raw absolute-URI requests" $
+      selectHttpProxyTarget rawProxyRequest { rawPathInfo = "http://example.com:not-a-port/resource" }
+        `shouldBe` Nothing
+
+    it "rejects malformed explicit ports in Host-header proxy requests" $
+      selectHttpProxyTarget hostHeaderProxyRequest { requestHeaderHost = Just "example.com:not-a-port" }
+        `shouldBe` Nothing
+
+    it "rejects HTTP/2 proxy requests without a Host header" $
+      selectHttpProxyTarget http2ProxyRequest { requestHeaderHost = Nothing }
+        `shouldBe` Nothing
 runProxyApp :: (HC.Manager -> Middleware) -> Request -> IO SResponse
+
 runProxyApp middleware req = do
   manager <- HC.newManager HC.defaultManagerSettings
   runSession (srequest $ SRequest req "") (middleware manager fallback)
@@ -57,6 +87,24 @@ rawProxyRequest = defaultRequest
   { requestMethod = "GET"
   , rawPathInfo = "http://example.com/resource"
   , requestHeaderHost = Just "example.com"
+  }
+
+hostHeaderProxyRequest :: Request
+hostHeaderProxyRequest = defaultRequest
+  { requestMethod = "GET"
+  , rawPathInfo = "/resource"
+  , requestHeaderHost = Just "example.com"
+  , requestHeaders = [("Proxy-Connection", "keep-alive")]
+  }
+
+http2ProxyRequest :: Request
+http2ProxyRequest = defaultRequest
+  { requestMethod = "GET"
+  , rawPathInfo = "/resource"
+  , requestHeaderHost = Just "example.com"
+  , requestHeaders = [("X-Scheme", "http")]
+  , httpVersion = HT.http20
+  , isSecure = True
   }
 
 connectRequest :: Request
