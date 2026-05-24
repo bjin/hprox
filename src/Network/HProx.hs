@@ -17,30 +17,11 @@ module Network.HProx
   , run
   ) where
 
-#ifdef QUIC_ENABLED
-import Data.ByteString.Char8 qualified as BS8
-import Data.Default.Class    (def)
-#endif
-#ifdef QUIC_ENABLED
-import Data.String qualified as String
-#endif
-import Data.Version            (showVersion)
-import Network.HTTP.Client.TLS (newTlsManager)
-#ifdef QUIC_ENABLED
-import Network.TLS qualified as TLS
-#endif
-import Network.TLS.SessionManager  qualified as SM
-import Network.Wai                 (Application)
-import Network.Wai.Handler.Warp    (runSettings)
-import Network.Wai.Handler.WarpTLS (runTLS)
+import Data.Version               (showVersion)
+import Network.HTTP.Client.TLS    (newTlsManager)
+import Network.TLS.SessionManager qualified as SM
+import Network.Wai                (Application)
 
-#ifdef QUIC_ENABLED
-import Control.Concurrent.Async     (mapConcurrently_)
-import Data.List                    (find)
-import Network.QUIC.Internal        qualified as Q
-import Network.Wai.Handler.Warp     (setAltSvc)
-import Network.Wai.Handler.WarpQUIC (runQUIC)
-#endif
 
 #ifdef OS_UNIX
 import Control.Exception    (SomeException, catch)
@@ -50,11 +31,9 @@ import System.Posix.User
 #endif
 
 import Control.Monad
-import Data.Maybe
 
 import Network.HProx.Auth
 import Network.HProx.Config
-import Network.HProx.DoH
 import Network.HProx.Log
 import Network.HProx.Runtime
 import Paths_hprox
@@ -135,36 +114,6 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
 #endif
 #endif
 
-#ifdef QUIC_ENABLED
-        alpn _ = return . fromMaybe "" . find (== "h3")
-        altsvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
-
-        quicset defaultCert qport = Q.defaultServerConfig
-            { Q.scAddresses      = [(String.fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
-            , Q.scVersions       = [Q.Version1, Q.Version2]
-            , Q.scCredentials    = TLS.Credentials [defaultCert]
-            , Q.scALPN           = Just alpn
-            , Q.scTlsHooks       = def { TLS.onServerNameIndication = lookupSNICredentials' }
-            , Q.scUse0RTT        = True
-            , Q.scSessionManager = smgr
-            }
-
-        lookupSNICredentials' host = lookupSNICredentials host allCerts
-
-        runner = case allCerts of
-            []                  -> runSettings settings
-            (_, defaultCert) : _ | Just qport <- _quic -> \app -> do
-                logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
-                mapConcurrently_ ($ app)
-                    [ runQUIC (quicset defaultCert qport) settings
-                    , runTLS (buildTlsSettings smgr allCerts defaultCert) (setAltSvc (altsvc qport) settings)
-                    ]
-            (_, defaultCert) : _ -> runTLS (buildTlsSettings smgr allCerts defaultCert) settings
-#else
-        runner = case allCerts of
-            []                   -> runSettings settings
-            (_, defaultCert) : _ -> runTLS (buildTlsSettings smgr allCerts defaultCert) settings
-#endif
 
     pauth <- loadProxyAuth logger _auth
 
@@ -179,7 +128,4 @@ run fallback conf@Config{..} = withLogger (getLoggerType _log) _loglevel $ \logg
     unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
     forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
 
-    logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
-    case _doh of
-        Nothing  -> runner proxy
-        Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver proxy))
+    runProxyServer conf logger settings smgr allCerts proxy

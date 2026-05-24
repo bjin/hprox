@@ -19,6 +19,7 @@ module Network.HProx.Runtime
   , loadTlsCredentials
   , lookupSNICredentials
   , lookupSNIHost
+  , runProxyServer
   , runtimeExceptionToLog
   , selectRunnerPlan
   , shouldIgnoreRuntimeException
@@ -42,19 +43,24 @@ import Network.HTTP2.Client        qualified as H2
 import Network.TLS                 qualified as TLS
 import Network.Wai                 (Application, Request, rawPathInfo)
 import Network.Wai.Handler.Warp
-    (InvalidRequest(..), Settings, defaultSettings, defaultShouldDisplayException,
+    (InvalidRequest(..), Settings, defaultSettings, defaultShouldDisplayException, runSettings,
     setBeforeMainLoop, setHost, setLogger, setNoParsePath, setOnException, setPort, setServerName)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure(..), TLSSettings, WarpTLSException, defaultTlsSettings, onInsecure,
+    (OnInsecure(..), TLSSettings, WarpTLSException, defaultTlsSettings, onInsecure, runTLS,
     tlsAllowedVersions, tlsCredentials, tlsServerHooks, tlsSessionManager)
 
 import System.IO.Error (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
-import Network.QUIC.Internal qualified as Q
+import Control.Concurrent.Async     (mapConcurrently_)
+import Data.List                    (find)
+import Network.QUIC.Internal        qualified as Q
+import Network.Wai.Handler.Warp     (setAltSvc)
+import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
 
 import Network.HProx.Config
+import Network.HProx.DoH
 import Network.HProx.Impl
 import Network.HProx.Log
 import Network.HProx.Route
@@ -143,6 +149,55 @@ startupOrder =
   , LogRuntimeConfig
   , StartRunner
   ]
+
+runProxyServer
+  :: Config
+  -> Logger
+  -> Settings
+  -> TLS.SessionManager
+  -> [(String, TLS.Credential)]
+  -> Application
+  -> IO ()
+runProxyServer conf@Config{..} logger settings sessionManager certs app = do
+  logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
+  case _doh of
+    Nothing  -> runner app
+    Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver app))
+  where
+    runner = case (selectRunnerPlan conf certs, defaultCertificate certs) of
+      (PlainWarpRunner, _) -> runSettings settings
+      (TlsWarpRunner, Just defaultCert) ->
+        runTLS (buildTlsSettings sessionManager certs defaultCert) settings
+#ifdef QUIC_ENABLED
+      (QuicAndTlsRunner qport, Just defaultCert) -> \app' -> do
+        logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "0.0.0.0" _bind) <> ":" <> toLogStr qport
+        mapConcurrently_ ($ app')
+          [ runQUIC (quicSettings defaultCert qport) settings
+          , runTLS (buildTlsSettings sessionManager certs defaultCert) (setAltSvc (altSvc qport) settings)
+          ]
+#endif
+#ifndef QUIC_ENABLED
+      (QuicAndTlsRunner _, Just defaultCert) ->
+        runTLS (buildTlsSettings sessionManager certs defaultCert) settings
+#endif
+      (_, Nothing) -> runSettings settings
+
+#ifdef QUIC_ENABLED
+    alpn _ = return . fromMaybe "" . find (== "h3")
+    altSvc qport = BS8.concat ["h3=\":", BS8.pack $ show qport ,"\""]
+
+    quicSettings defaultCert qport = Q.defaultServerConfig
+      { Q.scAddresses      = [(fromString (fromMaybe "0.0.0.0" _bind), fromIntegral qport)]
+      , Q.scVersions       = [Q.Version1, Q.Version2]
+      , Q.scCredentials    = TLS.Credentials [defaultCert]
+      , Q.scALPN           = Just alpn
+      , Q.scTlsHooks       = def { TLS.onServerNameIndication = lookupSNICredentials' }
+      , Q.scUse0RTT        = True
+      , Q.scSessionManager = sessionManager
+      }
+
+    lookupSNICredentials' host = lookupSNICredentials host certs
+#endif
 
 buildWarpRuntimePlan :: Config -> WarpRuntimePlan
 buildWarpRuntimePlan Config{..} = WarpRuntimePlan
