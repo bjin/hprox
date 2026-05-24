@@ -207,12 +207,11 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req
-        | redirectWebsocket pset req = return $ wsWrapper (ProxyDest wsHost wsPort)
-        | not isGETProxy             = return $ WPRApplication fallback
-        | otherwise                  = do
+        | Just (wsDest, wsWrapper) <- websocketTarget = return $ wsWrapper wsDest
+        | Just ((host, port), newRawPath) <- proxyTarget = do
             authorized <- checkAuth pset req
             if authorized
-              then return $ WPRModifiedRequest nreq (ProxyDest host port)
+              then return $ WPRModifiedRequest (proxiedRequest newRawPath) (ProxyDest host port)
               else if hideProxyAuth
                      then do
                        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
@@ -220,9 +219,15 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
                      else do
                        logger WARN $ "unauthorized request: " <> logRequest req
                        return $ WPRResponse (proxyAuthRequiredResponse pset)
+        | otherwise = return $ WPRApplication fallback
       where
-        (wsHost, wsPort) = parseHostPortWithDefault 80 (fromJust wsRemote)
-        wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
+        websocketTarget = do
+          ws <- wsRemote
+          let (wsHost, wsPort) = parseHostPortWithDefault 80 ws
+              wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
+          if wpsUpgradeToRaw defaultWaiProxySettings req
+            then Just (ProxyDest wsHost wsPort, wsWrapper)
+            else Nothing
 
         notCONNECT = requestMethod req /= "CONNECT"
         rawPath = rawPathInfo req
@@ -235,19 +240,19 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
         scheme = lookup "X-Scheme" (requestHeaders req)
         isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
 
-        isGETProxy = notCONNECT && (isRawPathProxy || isHTTP2Proxy || isJust hostHeader && hasProxyHeader)
-
-        nreq = req
-          { rawPathInfo = newRawPath
-          , requestHeaders = filter (not.isToStripHeader.fst) $ requestHeaders req
-          }
-
-        ((host, port), newRawPath)
-            | isRawPathProxy  = (parseHostPortWithDefault defaultPort hostPortP, newRawPathP)
-            | otherwise       = (fromJust hostHeader, rawPath)
+        proxyTarget
+            | not notCONNECT = Nothing
+            | isRawPathProxy = Just (parseHostPortWithDefault defaultPort hostPortP, newRawPathP)
+            | isHTTP2Proxy || hasProxyHeader = fmap (\host -> (host, rawPath)) hostHeader
+            | otherwise = Nothing
           where
             (hostPortP, newRawPathP) = BS8.span (/='/') $
                 BS.drop (BS.length rawPathPrefix) rawPath
+
+        proxiedRequest newRawPath = req
+          { rawPathInfo = newRawPath
+          , requestHeaders = filter (not.isToStripHeader.fst) $ requestHeaders req
+          }
 
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
