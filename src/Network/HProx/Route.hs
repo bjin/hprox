@@ -59,9 +59,9 @@ hostMatches ReverseRoute{ routeHost = Just domain } (Just host) = CI.mk domain =
 
 prefixMatches :: ReverseRoute -> BS8.ByteString -> Bool
 prefixMatches ReverseRoute{..} rawPath
-  | prefix == "/" = True
+  | prefix == "/"     = True
   | rawPath == prefix = True
-  | otherwise = prefix `BS8.isPrefixOf` rawPath
+  | otherwise         = prefix `BS8.isPrefixOf` rawPath
     && BS8.length rawPath > prefixLength
     && BS8.index rawPath prefixLength == '/'
   where
@@ -81,15 +81,15 @@ hostOnly host = maybe host fst (parseHostPort host)
 normalizeRoutePrefix :: BS8.ByteString -> BS8.ByteString
 normalizeRoutePrefix prefix
   | BS8.null prefix = "/"
-  | otherwise = stripTrailingSlash prefixed
+  | otherwise       = stripTrailingSlash prefixed
   where
     prefixed
       | "/" `BS8.isPrefixOf` prefix = prefix
-      | otherwise = "/" <> prefix
+      | otherwise                   = "/" <> prefix
 
     stripTrailingSlash value
       | BS8.length value > 1 && "/" `BS8.isSuffixOf` value = stripTrailingSlash (BS8.init value)
-      | otherwise = value
+      | otherwise                                             = value
 
 rewriteReverseProxyRequest :: ReverseRoute -> RequestHeaders -> BS8.ByteString -> ReverseProxyRewrite
 rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = ReverseProxyRewrite
@@ -109,8 +109,8 @@ rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = Rever
 rewritePath :: ReverseRoute -> BS8.ByteString -> BS8.ByteString
 rewritePath route@ReverseRoute{..} rawPath
   | not (prefixMatches route rawPath) = rawPath
-  | prefix == "/" = ensureLeadingSlash rawPath
-  | otherwise =
+  | prefix == "/"                     = ensureLeadingSlash rawPath
+  | otherwise                         =
       case BS8.drop (BS8.length prefix) rawPath of
         ""   -> "/"
         rest -> ensureLeadingSlash rest
@@ -120,4 +120,4 @@ rewritePath route@ReverseRoute{..} rawPath
 ensureLeadingSlash :: BS8.ByteString -> BS8.ByteString
 ensureLeadingSlash path
   | "/" `BS8.isPrefixOf` path = path
-  | otherwise = "/" <> path
+  | otherwise                 = "/" <> path

@@ -126,47 +126,45 @@ redirectLocation req
 renderRedirectAuthority :: BS.ByteString -> Int -> BS.ByteString
 renderRedirectAuthority host port
   | port == 80 || port == 443 = host
-  | otherwise = renderAuthorityWithDefault 443 host port
+  | otherwise                 = renderAuthorityWithDefault 443 host port
 
 originFormPathAndQuery :: Request -> BS.ByteString
 originFormPathAndQuery req
   | BS.null path || "/" `BS.isPrefixOf` path = path <> rawQueryString req
-  | otherwise = ""
+  | otherwise                                = ""
   where
     path = rawPathInfo req
 
 checkAuth :: ProxySettings -> Request -> IO Bool
 checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
-  (Nothing, _) -> return True
-
-  (_, Nothing) -> return False
-
-  (Just check, Just provided) -> do
-    let decoded = parseBasicProxyAuthorization provided
-        authorized = maybe False check decoded
-        authMsg = if authorized then "authorized" else "unauthorized"
-        logMsg = authMsg <> " request (credential: " <> toLogStr (redactedCredential decoded) <> ") from "
-                         <> toLogStr (show (remoteHost req))
-    logger TRACE logMsg
-    return authorized
+    (Nothing, _)                -> return True
+    (_, Nothing)                -> return False
+    (Just check, Just provided) -> do
+        let decoded = parseBasicProxyAuthorization provided
+            authorized = maybe False check decoded
+            authMsg = if authorized then "authorized" else "unauthorized"
+            logMsg = authMsg <> " request (credential: " <> toLogStr (redactedCredential decoded) <> ") from "
+                             <> toLogStr (show (remoteHost req))
+        logger TRACE logMsg
+        return authorized
   where
     authRsp = lookup HT.hProxyAuthorization (requestHeaders req)
 
 parseBasicProxyAuthorization :: BS.ByteString -> Maybe BS.ByteString
 parseBasicProxyAuthorization authHeader =
   case BS8.words authHeader of
-    [scheme, payload]
-      | CI.mk scheme == ("basic" :: CI.CI BS.ByteString) ->
-          either (const Nothing) Just (B64.decode payload)
-    _ -> Nothing
+      [scheme, payload]
+        | CI.mk scheme == ("basic" :: CI.CI BS.ByteString) ->
+            either (const Nothing) Just (B64.decode payload)
+      _ -> Nothing
 
 redactedCredential :: Maybe BS.ByteString -> BS.ByteString
 redactedCredential Nothing = "<invalid>"
 redactedCredential (Just decoded) =
   case BS8.break (== ':') decoded of
-    (username, password)
-      | not (BS.null password) -> BS.concat [username, ":<redacted>"]
-    _ -> "<invalid>"
+      (username, password)
+        | not (BS.null password) -> BS.concat [username, ":<redacted>"]
+      _ -> "<invalid>"
 
 parseConnectProxy :: Request -> Maybe (BS.ByteString, Int)
 parseConnectProxy req
@@ -251,32 +249,32 @@ reverseProxy ProxySettings{..} mgr fallback =
 
 selectHttpProxyTarget :: Request -> Maybe HttpProxyTarget
 selectHttpProxyTarget req
-    | requestMethod req == "CONNECT" = Nothing
-    | isRawPathProxy = do
+    | requestMethod req == "CONNECT"   = Nothing
+    | isRawPathProxy                   = do
         (host, port) <- parseProxyHostPortWithDefault defaultPort hostPortP
         return HttpProxyTarget
-          { httpProxyTargetHost = host
-          , httpProxyTargetPort = port
+          { httpProxyTargetHost    = host
+          , httpProxyTargetPort    = port
           , httpProxyTargetRawPath = newRawPathP
           }
-    | isHTTP2Proxy || hasProxyHeader = do
+    | isHTTP2Proxy || hasProxyHeader   = do
         hostPort <- requestHeaderHost req
         (host, port) <- parseProxyHostPortWithDefault defaultPort hostPort
         return HttpProxyTarget
-          { httpProxyTargetHost = host
-          , httpProxyTargetPort = port
+          { httpProxyTargetHost    = host
+          , httpProxyTargetPort    = port
           , httpProxyTargetRawPath = rawPath
           }
-    | otherwise = Nothing
+    | otherwise                        = Nothing
   where
-    rawPath = rawPathInfo req
+    rawPath       = rawPathInfo req
     rawPathPrefix = "http://"
-    defaultPort = 80
+    defaultPort   = 80
 
     isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
     hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
-    scheme = lookup xSchemeHeader (requestHeaders req)
-    isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && maybe False (headerValueEquals "http") scheme && isSecure req
+    scheme         = lookup xSchemeHeader (requestHeaders req)
+    isHTTP2Proxy   = HT.httpMajor (httpVersion req) >= 2 && maybe False (headerValueEquals "http") scheme && isSecure req
 
     (hostPortP, newRawPathP) = BS8.span (/='/') $
         BS.drop (BS.length rawPathPrefix) rawPath
@@ -284,9 +282,9 @@ selectHttpProxyTarget req
 parseProxyHostPortWithDefault :: Int -> BS.ByteString -> Maybe (BS.ByteString, Int)
 parseProxyHostPortWithDefault defaultPort hostPort
     | Just parsed <- parseHostPort hostPort = Just parsed
-    | BS.null hostPort = Nothing
-    | hasColon && not isBracketedHost = Nothing
-    | otherwise = Just (hostPort, defaultPort)
+    | BS.null hostPort                      = Nothing
+    | hasColon && not isBracketedHost       = Nothing
+    | otherwise                             = Just (hostPort, defaultPort)
   where
     hasColon = 58 `BS.elem` hostPort -- ':'
     isBracketedHost = "[" `BS.isPrefixOf` hostPort && "]" `BS.isSuffixOf` hostPort
@@ -301,35 +299,35 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
         | Just target@HttpProxyTarget{..} <- selectHttpProxyTarget req = do
             authorized <- checkAuth pset req
             if authorized
-              then return $ WPRModifiedRequest
-                (proxiedRequest target)
-                (ProxyDest httpProxyTargetHost httpProxyTargetPort)
-              else if hideProxyAuth
-                     then do
-                       logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
-                       return $ WPRApplication fallback
-                     else do
-                       logger WARN $ "unauthorized request: " <> logRequest req
-                       return $ WPRResponse (proxyAuthRequiredResponse pset)
+                then return $ WPRModifiedRequest
+                    (proxiedRequest target)
+                    (ProxyDest httpProxyTargetHost httpProxyTargetPort)
+                else if hideProxyAuth
+                    then do
+                        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+                        return $ WPRApplication fallback
+                    else do
+                        logger WARN $ "unauthorized request: " <> logRequest req
+                        return $ WPRResponse (proxyAuthRequiredResponse pset)
         | otherwise = return $ WPRApplication fallback
       where
         websocketTarget = do
-          ws <- wsRemote
-          let (wsHost, wsPort) = parseHostPortWithDefault 80 ws
-              wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
-          if wpsUpgradeToRaw defaultWaiProxySettings req
-            then Just (ProxyDest wsHost wsPort, wsWrapper)
-            else Nothing
+            ws <- wsRemote
+            let (wsHost, wsPort) = parseHostPortWithDefault 80 ws
+                wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
+            if wpsUpgradeToRaw defaultWaiProxySettings req
+                then Just (ProxyDest wsHost wsPort, wsWrapper)
+                else Nothing
 
         proxiedRequest target@HttpProxyTarget{..} =
-          let authority = renderHttpProxyAuthority target
-          in req
-               { rawPathInfo = httpProxyTargetRawPath
-               , requestHeaderHost = Just authority
-               , requestHeaders =
-                   (HT.hHost, authority) :
-                   filter (not.outgoingStripHeader.fst) (requestHeaders req)
-               }
+            let authority = renderHttpProxyAuthority target
+            in req
+                 { rawPathInfo = httpProxyTargetRawPath
+                 , requestHeaderHost = Just authority
+                 , requestHeaders =
+                     (HT.hHost, authority) :
+                     filter (not.outgoingStripHeader.fst) (requestHeaders req)
+                 }
 
         outgoingStripHeader header = header == HT.hHost || isProxyStripHeader header
 

@@ -99,7 +99,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         else Just (domain, prefix, remote)
     parseRev0 remote
       | null remote = Nothing
-      | otherwise = Just (Nothing, "/", BS8.pack remote)
+      | otherwise   = Just (Nothing, "/", BS8.pack remote)
 
     parseRev ('/':'/':s) = case elemIndex '/' s of
         Nothing  -> Nothing

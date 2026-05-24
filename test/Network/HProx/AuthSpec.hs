@@ -114,8 +114,6 @@ withHProx authPath action = do
 
 fallback :: Application
 fallback _req respond = respond $ responseLBS HT.status200 [] "fallback"
-
-
 getFreePort :: IO Int
 getFreePort = bracket open close socketPortInt
   where

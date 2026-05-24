@@ -50,10 +50,10 @@ data PrivilegeDropPlan = PrivilegeDropPlan
 
 planPrivilegeDrop :: Maybe ResolvedUser -> Maybe ResolvedGroup -> [ResolvedGroup] -> PrivilegeDropPlan
 planPrivilegeDrop userEntry groupEntry allGroups = PrivilegeDropPlan
-  { privilegeDropUserName = resolvedUserName <$> userEntry
-  , privilegeDropUserID = resolvedUserID <$> userEntry
-  , privilegeDropGroupName = resolvedGroupName <$> groupEntry
-  , privilegeDropGroupID = finalGroupID
+  { privilegeDropUserName            = resolvedUserName <$> userEntry
+  , privilegeDropUserID              = resolvedUserID <$> userEntry
+  , privilegeDropGroupName           = resolvedGroupName <$> groupEntry
+  , privilegeDropGroupID             = finalGroupID
   , privilegeDropSupplementaryGroups = supplementaryGroups
   }
   where
@@ -108,23 +108,23 @@ dropRootPriviledge logger user groupName' = do
 
 verifyUserID :: (LogStr -> IO ()) -> PrivilegeID -> IO ()
 verifyUserID abort expectedUserID = do
-  realUserID <- getRealUserID
-  effectiveUserID <- getEffectiveUserID
-  when (fromIntegral realUserID /= expectedUserID || fromIntegral effectiveUserID /= expectedUserID || realUserID == 0) $
-    abort "failed to setuid, aborting"
+    realUserID <- getRealUserID
+    effectiveUserID <- getEffectiveUserID
+    when (fromIntegral realUserID /= expectedUserID || fromIntegral effectiveUserID /= expectedUserID || realUserID == 0) $
+        abort "failed to setuid, aborting"
 
 verifyGroupID :: (LogStr -> IO ()) -> PrivilegeID -> IO ()
 verifyGroupID abort expectedGroupID = do
-  realGroupID <- getRealGroupID
-  effectiveGroupID <- getEffectiveGroupID
-  when (fromIntegral realGroupID /= expectedGroupID || fromIntegral effectiveGroupID /= expectedGroupID || realGroupID == 0) $
-    abort "failed to setgid, aborting"
+    realGroupID <- getRealGroupID
+    effectiveGroupID <- getEffectiveGroupID
+    when (fromIntegral realGroupID /= expectedGroupID || fromIntegral effectiveGroupID /= expectedGroupID || realGroupID == 0) $
+        abort "failed to setgid, aborting"
 
 verifySupplementaryGroups :: (LogStr -> IO ()) -> [PrivilegeID] -> IO ()
 verifySupplementaryGroups abort expectedGroups = do
-  changedGroups <- map fromIntegral <$> getGroups
-  when (sort (nub changedGroups) /= sort (nub expectedGroups)) $
-    abort "failed to set supplementary groups, aborting"
+    changedGroups <- map fromIntegral <$> getGroups
+    when (sort (nub changedGroups) /= sort (nub expectedGroups)) $
+        abort "failed to set supplementary groups, aborting"
 #else
 dropRootPriviledge :: Logger -> Maybe String -> Maybe String -> IO Bool
 dropRootPriviledge _ _ _ = return False

@@ -35,7 +35,7 @@ run :: Application -- ^ fallback application
     -> Config      -- ^ configuration
     -> IO ()
 run fallback conf@Config{..} =
-  either (ioError . userError) runValidated (validateRuntimeConfig conf)
+    either (ioError . userError) runValidated (validateRuntimeConfig conf)
   where
     runValidated () =
       let runtimeConfig = buildRuntimeConfig conf
@@ -53,9 +53,9 @@ run fallback conf@Config{..} =
 
         let beforeMainLoop =
 #ifdef OS_UNIX
-                Just doBeforeMainLoop
+              Just doBeforeMainLoop
 #else
-                Nothing
+              Nothing
 #endif
             settings = buildWarpSettings conf logger beforeMainLoop
 
@@ -66,7 +66,7 @@ run fallback conf@Config{..} =
                 case (dropped, _quic) of
                     (True, Just qport) | qport < 1024 -> logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
                     (True, _) -> logger INFO "root priviledge dropped"
-                    _ -> return ()
+                    _         -> return ()
 #else
                 when dropped $ logger INFO "root priviledge dropped"
 #endif

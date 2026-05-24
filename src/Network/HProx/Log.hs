@@ -15,7 +15,6 @@ module Network.HProx.Log
   , withLogger
   ) where
 
-
 import System.Log.FastLogger
 
 -- | Logging level, default value is INFO
@@ -25,7 +24,7 @@ data LogLevel = TRACE
               | WARN
               | ERROR
               | NONE
-    deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord)
 
 logLevelReader :: String -> Maybe LogLevel
 logLevelReader "trace" = Just TRACE
@@ -58,8 +57,6 @@ logWith :: TimedFastLogger -> LogLevel -> LogStr -> IO ()
 logWith logger level logstr = logger (\time -> toLogStr time <> " [" <> toLogStr (show level) <> "] " <> logstr <> "\n")
 
 type Logger = LogLevel -> LogStr -> IO ()
-
-
 withLogger :: LogType -> LogLevel -> ((LogLevel -> LogStr -> IO ()) -> IO ()) -> IO ()
 withLogger logType logLevel toRun = do
     timeCache <- newTimeCache "%Y/%m/%d %T %Z"

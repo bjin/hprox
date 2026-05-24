@@ -106,8 +106,8 @@ data StartupStep
 
 buildRuntimeConfig :: Config -> RuntimeConfig
 buildRuntimeConfig Config{..} = RuntimeConfig
-  { runtimeConfigLogOutput = parseLogOutput _log
-  , runtimeConfigReverseRoutes = map fromReverseRouteTuple revSorted
+  { runtimeConfigLogOutput          = parseLogOutput _log
+  , runtimeConfigReverseRoutes      = map fromReverseRouteTuple revSorted
   , runtimeConfigReverseRouteTuples = revSorted
   }
   where
@@ -136,7 +136,6 @@ buildProxyApplication isSSL pset manager fallback =
         httpProxy pset manager $
           reverseProxy pset manager fallback
 
-
 selectRunnerPlan :: Config -> [(String, a)] -> RunnerPlan
 #ifdef QUIC_ENABLED
 selectRunnerPlan Config{..} certs = case certs of
@@ -161,7 +160,7 @@ validateRuntimeConfig Config{..} = do
 validatePortField :: String -> Int -> Either String ()
 validatePortField field port
   | port >= 1 && port <= 65535 = Right ()
-  | otherwise = Left $ "invalid " <> field <> ": " <> show port <> " (expected 1..65535)"
+  | otherwise                  = Left $ "invalid " <> field <> ": " <> show port <> " (expected 1..65535)"
 
 startupOrder :: [StartupStep]
 startupOrder =
@@ -212,17 +211,15 @@ runProxyServer conf@Config{..} logger settings sessionManager certs app = do
         runTLS (buildTlsSettings sessionManager certs defaultCert) settings
 #endif
       (_, Nothing) -> runSettings settings
-
-
 #ifdef QUIC_ENABLED
     lookupSNICredentials' host = lookupSNICredentials host certs
 #endif
 
 buildWarpRuntimePlan :: Config -> WarpRuntimePlan
 buildWarpRuntimePlan Config{..} = WarpRuntimePlan
-  { runtimeBindHost = fromMaybe "*6" _bind
-  , runtimePort = _port
-  , runtimeServerName = _name
+  { runtimeBindHost    = fromMaybe "*6" _bind
+  , runtimePort        = _port
+  , runtimeServerName  = _name
   , runtimeNoParsePath = True
   }
 
@@ -250,7 +247,7 @@ runtimeExceptionHandler logger logLevel req ex =
 warpAccessLogger :: Logger -> Request -> HT.Status -> Maybe Integer -> IO ()
 warpAccessLogger logger req status _
   | shouldSuppressAccessLog req = return ()
-  | otherwise =
+  | otherwise                   =
       logger TRACE $ "(" <> toLogStr (HT.statusCode status) <> ") " <> logRequest req
 
 shouldSuppressAccessLog :: Request -> Bool
@@ -261,19 +258,19 @@ shouldIgnoreRuntimeException logLevel ex = isNothing (runtimeExceptionToLog logL
 
 runtimeExceptionToLog :: LogLevel -> SomeException -> Maybe SomeException
 runtimeExceptionToLog logLevel ex
-  | logLevel > DEBUG = Nothing
-  | not (defaultShouldDisplayException ex) = Nothing
+  | logLevel > DEBUG                                      = Nothing
+  | not (defaultShouldDisplayException ex)                = Nothing
   | Just ioe <- fromException ex
-  , ioeGetErrorType ioe == EOF = Nothing
-  | Just (H2.BadThingHappen ex') <- fromException ex = runtimeExceptionToLog logLevel ex'
-  | Just (_ :: H2.HTTP2Error) <- fromException ex = Nothing
+  , ioeGetErrorType ioe == EOF                            = Nothing
+  | Just (H2.BadThingHappen ex') <- fromException ex       = runtimeExceptionToLog logLevel ex'
+  | Just (_ :: H2.HTTP2Error) <- fromException ex          = Nothing
 #ifdef QUIC_ENABLED
-  | Just (Q.BadThingHappen ex') <- fromException ex = runtimeExceptionToLog logLevel ex'
-  | Just (_ :: Q.QUICException) <- fromException ex = Nothing
+  | Just (Q.BadThingHappen ex') <- fromException ex        = runtimeExceptionToLog logLevel ex'
+  | Just (_ :: Q.QUICException) <- fromException ex        = Nothing
 #endif
-  | Just (_ :: WarpTLSException) <- fromException ex = Nothing
-  | Just ConnectionClosedByPeer <- fromException ex = Nothing
-  | otherwise = Just ex
+  | Just (_ :: WarpTLSException) <- fromException ex       = Nothing
+  | Just ConnectionClosedByPeer <- fromException ex        = Nothing
+  | otherwise                                             = Just ex
 
 loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
 loadTlsCredentials certFiles = mapM readTlsCredential certFiles
@@ -333,4 +330,4 @@ singleLabelWildcardMatches host suffix =
 asciiLower :: Char -> Char
 asciiLower char
   | char >= 'A' && char <= 'Z' = toEnum (fromEnum char + 32)
-  | otherwise = char
+  | otherwise                  = char

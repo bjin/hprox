@@ -135,9 +135,9 @@ addPaddingVariant1 0 = noPaddingConduit
 addPaddingVariant1 n = do
     mbs <- await
     case mbs of
-        Nothing -> return ()
-        Just bs | BS.null bs -> return ()
-        Just bs -> do
+        Nothing                  -> return ()
+        Just bs | BS.null bs     -> return ()
+        Just bs                  -> do
             let remaining = min (BS.length bs) variant1MaxPayloadLength
             toConsume <- if remaining > variant1SmallPayloadThreshold && remaining < variant1LargePayloadThreshold
                          then liftIO $ randInt variant1SplitMinLength variant1SplitMaxLength

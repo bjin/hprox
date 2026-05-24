@@ -35,7 +35,7 @@ import Data.ByteString.Base64 qualified as Base64
 
 data Password = PlainText !BS.ByteString
               | Salted !BS.ByteString !BS.ByteString
-    deriving (Show, Eq)
+  deriving (Show, Eq)
 
 data PasswordHashError = PasswordHashError !String
   deriving (Show, Eq)
@@ -43,7 +43,7 @@ data PasswordHashError = PasswordHashError !String
 instance Exception PasswordHashError
 
 data PasswordSalted = PasswordSalted !BS.ByteString !BS.ByteString
-    deriving (Show, Eq)
+  deriving (Show, Eq)
 
 splitBy :: Eq a => a -> [a] -> NonEmpty [a]
 splitBy _ [] = NE.singleton []
@@ -55,13 +55,13 @@ passwordReader :: BS.ByteString -> Maybe (BS.ByteString, Password)
 passwordReader line = case BS8.split ':' line of
     [user, pass]         -> Just (user, PlainText pass)
     [user, salt, hashed] -> case (Base64.decode salt, Base64.decode hashed) of
-                                (Right salt', Right hashed') -> Just (user, Salted salt' hashed')
-                                _otherwise                   -> Nothing
+        (Right salt', Right hashed') -> Just (user, Salted salt' hashed')
+        _otherwise                   -> Nothing
     _otherwise           -> Nothing
 
 passwordWriter :: BS.ByteString -> PasswordSalted -> BS.ByteString
 passwordWriter user (PasswordSalted salt hash) =
-    BS.concat [user , ":" , Base64.encode salt , ":" , Base64.encode hash]
+    BS.concat [user, ":", Base64.encode salt, ":", Base64.encode hash]
 
 hashPasswordWithSalt :: BS.ByteString -> Password -> Either PasswordHashError PasswordSalted
 hashPasswordWithSalt salt (PlainText pass) =
@@ -86,7 +86,7 @@ verifyPassword (PasswordSalted salt hashed) pass =
 parseHostPort :: BS.ByteString -> Maybe (BS.ByteString, Int)
 parseHostPort hostPort = do
     lastColon <- BS8.elemIndexEnd ':' hostPort
-    port <- BS8.readInt (BS.drop (lastColon+1) hostPort) >>= checkPort
+    port <- BS8.readInt (BS.drop (lastColon + 1) hostPort) >>= checkPort
     return (BS.take lastColon hostPort, port)
   where
     checkPort (p, bs)
@@ -98,4 +98,5 @@ parseHostPortWithDefault defaultPort hostPort =
     fromMaybe (hostPort, defaultPort) $ parseHostPort hostPort
 
 responseKnownLength :: Status -> ResponseHeaders -> LBS.ByteString -> Response
-responseKnownLength status headers bs = responseLBS status (headers ++ [("Content-Length", BS8.pack $ show (LBS.length bs))]) bs
+responseKnownLength status headers bs =
+    responseLBS status (headers ++ [("Content-Length", BS8.pack $ show (LBS.length bs))]) bs

@@ -39,7 +39,7 @@ createResolver remote handle = do
     DNS.withResolver seed handle
   where
     (h, p) = parseHostPortWithDefault 53 (BS8.pack remote)
-    info = DNS.RCHostPort (BS8.unpack h) (fromIntegral p)
+    info   = DNS.RCHostPort (BS8.unpack h) (fromIntegral p)
 
     conf = DNS.defaultResolvConf { resolvInfo = info }
 
@@ -50,18 +50,18 @@ dnsOverHTTPS resolver =
 dnsOverHTTPSWithLookup :: (Question -> IO (Either DNS.DNSError DNSMessage)) -> Middleware
 dnsOverHTTPSWithLookup lookupRaw fallback req respond
     | pathInfo req == ["dns-query"] && isSecure req = handleDoH lookupRaw req respond
-    | otherwise = fallback req respond
+    | otherwise                                     = fallback req respond
 
 handleDoH :: (Question -> IO (Either DNS.DNSError DNSMessage)) -> Application
 handleDoH lookupRaw req respond = do
     dohRequest <- parseDoHRequest req
     case dohRequest of
-      Nothing -> respond errorResp
-      Just DoHRequest{..} -> do
-        resp <- lookupRaw dohQuestion
-        respond $ case resp of
-          Left _    -> resolverErrorResp
-          Right msg -> encodeDoHResponse dohIdentifier msg
+        Nothing -> respond errorResp
+        Just DoHRequest{..} -> do
+            resp <- lookupRaw dohQuestion
+            respond $ case resp of
+                Left _    -> resolverErrorResp
+                Right msg -> encodeDoHResponse dohIdentifier msg
 
 parseDoHRequest :: Request -> IO (Maybe DoHRequest)
 parseDoHRequest req = parseDoHRequestWithBodyReader (getRequestBodyChunk req) req
@@ -73,12 +73,12 @@ parseDoHRequestWithBodyReader readChunk req
         return $ decodeDoHQuery =<< either (const Nothing) Just (Base64.decodeUnpadded dnsStr)
     | requestMethod req == "POST" =
         case requestBodyLength req of
-          KnownLength len
-            | len <= fromIntegral maxPostBodyLength ->
-                decodeDoHQuery <$> readRequestBody readChunk (fromIntegral len)
-          ChunkedBody ->
-            decodeDoHQuery <$> readChunkedRequestBody readChunk maxPostBodyLength
-          _otherwise -> return Nothing
+            KnownLength len
+                | len <= fromIntegral maxPostBodyLength ->
+                    decodeDoHQuery <$> readRequestBody readChunk (fromIntegral len)
+            ChunkedBody ->
+                decodeDoHQuery <$> readChunkedRequestBody readChunk maxPostBodyLength
+            _otherwise -> return Nothing
     | otherwise = return Nothing
 
 readRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
@@ -86,7 +86,7 @@ readRequestBody readChunk expectedLength = go expectedLength []
   where
     go remaining chunks
       | remaining <= 0 = return $ BS.concat $ reverse chunks
-      | otherwise = do
+      | otherwise      = do
           chunk <- readChunk
           if BS.null chunk
             then return $ BS.concat $ reverse chunks
@@ -99,24 +99,24 @@ readChunkedRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
 readChunkedRequestBody readChunk maxLength = go 0 []
   where
     go total chunks = do
-      chunk <- readChunk
-      if BS.null chunk
-        then return $ BS.concat $ reverse chunks
-        else do
-          let nextTotal = total + BS.length chunk
-          if nextTotal > maxLength
-            then return ""
-            else go nextTotal (chunk : chunks)
+        chunk <- readChunk
+        if BS.null chunk
+          then return $ BS.concat $ reverse chunks
+          else do
+            let nextTotal = total + BS.length chunk
+            if nextTotal > maxLength
+              then return ""
+              else go nextTotal (chunk : chunks)
 
 decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
 decodeDoHQuery dnsQuery =
     case DNS.decode dnsQuery of
-      Right (DNSMessage { question = [q], header = DNSHeader {..} }) ->
-        Just DoHRequest
-          { dohIdentifier = identifier
-          , dohQuestion = q
-          }
-      _otherwise -> Nothing
+        Right (DNSMessage { question = [q], header = DNSHeader {..} }) ->
+            Just DoHRequest
+              { dohIdentifier = identifier
+              , dohQuestion   = q
+              }
+        _otherwise -> Nothing
 
 encodeDoHResponse :: DNS.Identifier -> DNSMessage -> Response
 encodeDoHResponse ident dnsResp@DNSMessage{header = header} =

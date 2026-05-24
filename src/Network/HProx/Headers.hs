@@ -39,7 +39,7 @@ isProxyHeader header = "proxy" `BS.isPrefixOf` CI.foldedCase header
 
 isForwardedHeader :: HeaderName -> Bool
 isForwardedHeader header =
-  folded == "forwarded" || "x-forwarded" `BS.isPrefixOf` folded
+    folded == "forwarded" || "x-forwarded" `BS.isPrefixOf` folded
   where
     folded = CI.foldedCase header
 
@@ -51,5 +51,5 @@ headerValueEquals expected actual = CI.mk expected == CI.mk actual
 
 isProxyStripHeader :: HeaderName -> Bool
 isProxyStripHeader header =
-  isProxyHeader header || isForwardedHeader header || isCDNHeader header ||
-  header == xRealIPHeader || header == xSchemeHeader
+    isProxyHeader header || isForwardedHeader header || isCDNHeader header ||
+    header == xRealIPHeader || header == xSchemeHeader

@@ -57,11 +57,11 @@ runQuicAndTls
   -> IO ()
 #ifdef QUIC_ENABLED
 runQuicAndTls logger bind settings tlsSettings onSNI sessionManager defaultCert qport app = do
-  logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "all interfaces" bind) <> ":" <> toLogStr qport
-  mapConcurrently_ ($ app)
-    [ runQUIC (buildQuicServerConfig bind onSNI sessionManager defaultCert qport) settings
-    , runTLS tlsSettings (setAltSvc (quicAltSvc qport) settings)
-    ]
+    logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "all interfaces" bind) <> ":" <> toLogStr qport
+    mapConcurrently_ ($ app)
+        [ runQUIC (buildQuicServerConfig bind onSNI sessionManager defaultCert qport) settings
+        , runTLS tlsSettings (setAltSvc (quicAltSvc qport) settings)
+        ]
 
 alpn :: Q.Version -> [BS8.ByteString] -> IO BS8.ByteString
 alpn _ protocols = return $ fromMaybe "" $ find (== "h3") protocols
