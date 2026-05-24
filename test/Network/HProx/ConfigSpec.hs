@@ -81,9 +81,32 @@ spec = do
       _rev prefixOnly `shouldBe` [(Nothing, "/api/", "backend:80")]
       _rev domainAndPrefix `shouldBe` [(Just "example.com", "/api/", "backend:80")]
 
+
+    it "accepts only bounded listener ports" $ do
+      low <- parseConfig ["--port", "1"]
+      high <- parseConfig ["--port", "65535"]
+      _port low `shouldBe` 1
+      _port high `shouldBe` 65535
+      shouldExitWith ["--port", "0"] (ExitFailure 1)
+      shouldExitWith ["--port", "65536"] (ExitFailure 1)
+      shouldExitWith ["--port", "-1"] (ExitFailure 1)
+
+#ifdef QUIC_ENABLED
+    it "accepts only bounded QUIC ports" $ do
+      low <- parseConfig ["--quic", "1"]
+      high <- parseConfig ["--quic", "65535"]
+      _quic low `shouldBe` Just 1
+      _quic high `shouldBe` Just 65535
+      shouldExitWith ["--quic", "0"] (ExitFailure 1)
+      shouldExitWith ["--quic", "65536"] (ExitFailure 1)
+      shouldExitWith ["--quic", "-1"] (ExitFailure 1)
+#endif
     it "rejects invalid TLS, reverse proxy, and log-level options" $ do
       shouldExitWith ["--tls", "example.com:cert-only"] (ExitFailure 1)
       shouldExitWith ["--rev", "//example.com"] (ExitFailure 1)
+      shouldExitWith ["--rev", "/api/"] (ExitFailure 1)
+      shouldExitWith ["--rev", "/"] (ExitFailure 1)
+      shouldExitWith ["--rev", "///api/backend:80"] (ExitFailure 1)
       shouldExitWith ["--loglevel", "verbose"] (ExitFailure 1)
 
     it "exercises help and version parser exits" $ do

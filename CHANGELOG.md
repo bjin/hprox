@@ -23,6 +23,7 @@
 - Enforced strict `Proxy-Authorization` parsing for HTTP proxy authentication: only `Basic` credentials with valid base64 decode are accepted now
 - Ensured malformed auth-file warnings redact raw line contents and report line numbers with optional username context
 - Added tests covering CRLF plaintext auth-file verification/rewrite and malformed-line log redaction
+- Added bounded validation for `--port` and `--quic`, including `Config` runtime validation for direct values, and tightened `--rev` route parsing to reject empty upstream/domain components before startup
 
 ### Security
 - Redacted proxy credentials in TRACE logs as `username:<redacted>` so passwords are never logged

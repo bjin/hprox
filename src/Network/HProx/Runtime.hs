@@ -29,6 +29,7 @@ module Network.HProx.Runtime
   , shouldWrapDNSOverHTTPS
   , sniPatternMatches
   , startupOrder
+  , validateRuntimeConfig
   ) where
 
 import Control.Exception           (SomeException, displayException, fromException)
@@ -148,6 +149,18 @@ selectRunnerPlan _ certs = case certs of
 
 shouldWrapDNSOverHTTPS :: Config -> Bool
 shouldWrapDNSOverHTTPS Config{..} = isJust _doh
+
+validateRuntimeConfig :: Config -> Either String ()
+validateRuntimeConfig Config{..} = do
+  validatePortField "--port" _port
+#ifdef QUIC_ENABLED
+  maybe (Right ()) (validatePortField "--quic") _quic
+#endif
+
+validatePortField :: String -> Int -> Either String ()
+validatePortField field port
+  | port >= 1 && port <= 65535 = Right ()
+  | otherwise = Left $ "invalid " <> field <> ": " <> show port <> " (expected 1..65535)"
 
 startupOrder :: [StartupStep]
 startupOrder =

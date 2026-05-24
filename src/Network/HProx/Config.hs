@@ -78,22 +78,35 @@ data CertFile = CertFile
 parser :: ParserInfo Config
 parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
   where
+    parseBoundedPort optionName raw =
+      case reads raw of
+        [(parsedPort, "")] | validPort parsedPort -> Right parsedPort
+        _                                         -> Left $ optionName <> " must be in range 1..65535"
+
+    validPort parsedPort = parsedPort >= (1 :: Int) && parsedPort <= 65535
+
     parseSSL s = case splitBy ':' s of
         host :| [cert, key] -> Right (host, CertFile cert key)
         _otherwise          -> Left "invalid format for ssl certificates"
 
-    parseRev0 s@('/':_) = case elemIndices '/' s of
+    parseRev0 s@('/':_) = do
+      (domain, prefix, remote) <- case elemIndices '/' s of
         []      -> Nothing
         indices -> let (prefix, remote) = splitAt (last indices + 1) s
                    in Just (Nothing, BS8.pack prefix, BS8.pack remote)
-    parseRev0 remote = Just (Nothing, "/", BS8.pack remote)
+      if BS8.null remote
+        then Nothing
+        else Just (domain, prefix, remote)
+    parseRev0 remote
+      | null remote = Nothing
+      | otherwise = Just (Nothing, "/", BS8.pack remote)
 
     parseRev ('/':'/':s) = case elemIndex '/' s of
         Nothing  -> Nothing
+        Just 0   -> Nothing
         Just ind -> let (domain, other) = splitAt ind s
                     in do (_, prefix, remote) <- parseRev0 other
                           return (Just (BS8.pack domain), prefix, remote)
-
     parseRev s = parseRev0 s
 
     desc = "a lightweight HTTP proxy server, and more"
@@ -126,7 +139,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
        <> metavar "bind_ip"
        <> help "Specify the IP address to bind to (default: all interfaces)")
 
-    port = option auto
+    port = option (eitherReader (parseBoundedPort "--port"))
         ( long "port"
        <> short 'p'
        <> metavar "port"
@@ -209,7 +222,7 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
 #endif
 
 #ifdef QUIC_ENABLED
-    quic = optional $ option auto
+    quic = optional $ option (eitherReader (parseBoundedPort "--quic"))
         ( long "quic"
        <> short 'q'
        <> metavar "port"

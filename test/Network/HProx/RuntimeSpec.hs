@@ -48,6 +48,17 @@ spec = do
               , (Nothing, "/", "catch:80")
               ]
           }
+
+  describe "runtime config validation" $ do
+    it "rejects direct Config listener ports outside the TCP port range" $ do
+      validateRuntimeConfig defaultConfig { _port = 0 } `shouldBe` Left "invalid --port: 0 (expected 1..65535)"
+      validateRuntimeConfig defaultConfig { _port = 65536 } `shouldBe` Left "invalid --port: 65536 (expected 1..65535)"
+
+#ifdef QUIC_ENABLED
+    it "rejects direct Config QUIC ports outside the UDP port range" $ do
+      validateRuntimeConfig defaultConfig { _quic = Just 0 } `shouldBe` Left "invalid --quic: 0 (expected 1..65535)"
+      validateRuntimeConfig defaultConfig { _quic = Just 65536 } `shouldBe` Left "invalid --quic: 65536 (expected 1..65535)"
+#endif
   describe "Warp runtime settings" $ do
     it "captures default bind, port, server name, and no-parse-path settings" $
       buildWarpRuntimePlan defaultConfig `shouldBe` WarpRuntimePlan
