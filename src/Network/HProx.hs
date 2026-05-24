@@ -66,6 +66,7 @@ import Network.HProx.Config
 import Network.HProx.DoH
 import Network.HProx.Impl
 import Network.HProx.Log
+import Network.HProx.Route
 import Paths_hprox
 
 readCert :: CertFile -> IO TLS.Credential
@@ -227,11 +228,12 @@ run fallback Config{..} = withLogger (getLoggerType _log) _loglevel $ \logger ->
     manager <- newTlsManager
 
     let revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
+        revRoutes = map fromReverseRouteTuple revSorted
         pset = ProxySettings
           { proxyAuth      = pauth
           , passPrompt     = Just _name
           , wsRemote       = _ws
-          , revRemoteMap   = revSorted
+          , revRemoteMap   = revRoutes
           , hideProxyAuth  = _hide
           , naivePadding   = _naive && isSSL
           , acmeThumbprint = _acme

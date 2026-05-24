@@ -45,13 +45,14 @@ import Network.Wai.Middleware.StripHeaders
 
 import Network.HProx.Log
 import Network.HProx.Naive
+import Network.HProx.Route
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
   { proxyAuth      :: !(Maybe (BS.ByteString -> Bool))
   , passPrompt     :: !(Maybe BS.ByteString)
   , wsRemote       :: !(Maybe BS.ByteString)
-  , revRemoteMap   :: ![(Maybe BS.ByteString, BS.ByteString, BS.ByteString)]
+  , revRemoteMap   :: ![ReverseRoute]
   , hideProxyAuth  :: !Bool
   , naivePadding   :: !Bool
   , acmeThumbprint :: !(Maybe BS.ByteString)
@@ -180,31 +181,22 @@ reverseProxy ProxySettings{..} mgr fallback =
   where
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
-    checkDomain Nothing _         = True
-    checkDomain _ Nothing         = False
-    checkDomain (Just a) (Just b) = a == b
+    proxyResponseFor req =
+      case findMatchingRoute revRemoteMap (requestHeaderHost req) (rawPathInfo req) of
+        Nothing    -> WPRApplication fallback
+        Just route -> routeProxyResponse route req
 
-    proxyResponseFor req = go revRemoteMap
-      where
-        go ((mTargetHost, prefix, revRemote):left)
-          | checkDomain mTargetHost mReqHost && prefix `BS.isPrefixOf` rawPathInfo req =
-            if revPort == 443
-                then WPRModifiedRequestSecure nreq (ProxyDest revHost revPort)
-                else WPRModifiedRequest nreq (ProxyDest revHost revPort)
-          | otherwise = go left
-          where
-            mReqHost = fmap (fst . parseHostPortWithDefault (error "unused port number")) (requestHeaderHost req)
-            (revHost, revPort) = parseHostPortWithDefault 80 revRemote
-            nreq = req
-              { requestHeaders = hdrs
-              , requestHeaderHost = Just revHost
-              , rawPathInfo = BS.drop (BS.length prefix - 1) (rawPathInfo req)
-              }
-            hdrs = (HT.hHost, revHost) : [ (hdn, hdv)
-                                         | (hdn, hdv) <- requestHeaders req
-                                         , not (isToStripHeader hdn) && hdn /= HT.hHost
-                                         ]
-        go _ = WPRApplication fallback
+    routeProxyResponse route req =
+      let rewrite = rewriteReverseProxyRequest route (requestHeaders req) (rawPathInfo req)
+          nreq = req
+            { requestHeaders = rewriteHeaders rewrite
+            , requestHeaderHost = rewriteRequestHost rewrite
+            , rawPathInfo = rewriteRawPath rewrite
+            }
+          dest = ProxyDest (rewriteUpstream rewrite) (rewritePort rewrite)
+      in if rewriteSecure rewrite
+           then WPRModifiedRequestSecure nreq dest
+           else WPRModifiedRequest nreq dest
 
 httpGetProxy :: ProxySettings -> HC.Manager -> Middleware
 httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings (return.proxyResponseFor) settings mgr
