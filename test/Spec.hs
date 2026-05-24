@@ -4,7 +4,8 @@ module Main
   ( main
   ) where
 
-import Network.HProx.PureSpec qualified as PureSpec
+import Network.HProx.ConfigSpec qualified as ConfigSpec
+import Network.HProx.PureSpec   qualified as PureSpec
 import Test.Hspec
 
 
@@ -13,4 +14,5 @@ main = hspec $ do
   describe "hprox test suite" $
     it "runs" $
       True `shouldBe` True
+  ConfigSpec.spec
   PureSpec.spec
