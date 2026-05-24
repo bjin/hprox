@@ -2,29 +2,46 @@
 
 -- Copyright (C) 2023 Bin Jin. All Rights Reserved.
 
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Network.HProx.Runtime
   ( ProxyRuntime(..)
+  , WarpRuntimePlan(..)
   , buildProxyApplication
   , buildProxyRuntime
   , buildTlsSettings
+  , buildWarpRuntimePlan
   , defaultCertificate
   , loadTlsCredentials
   , lookupSNICredentials
   , lookupSNIHost
+  , shouldIgnoreRuntimeException
+  , shouldSuppressAccessLog
   , sniPatternMatches
   ) where
 
+import Control.Exception           (SomeException, fromException)
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.List                   (isSuffixOf, sortOn)
-import Data.Maybe                  (isJust)
+import Data.Maybe                  (fromMaybe, isJust)
 import Data.Ord                    (Down(..))
+import GHC.IO.Exception            (IOErrorType(..))
 import Network.HTTP.Client         qualified as HC
+import Network.HTTP2.Client        qualified as H2
 import Network.TLS                 qualified as TLS
-import Network.Wai                 (Application)
+import Network.Wai                 (Application, Request, rawPathInfo)
+import Network.Wai.Handler.Warp    (InvalidRequest(..), defaultShouldDisplayException)
 import Network.Wai.Handler.WarpTLS
-    (OnInsecure(..), TLSSettings, defaultTlsSettings, onInsecure, tlsAllowedVersions,
-    tlsCredentials, tlsServerHooks, tlsSessionManager)
+    (OnInsecure(..), TLSSettings, WarpTLSException, defaultTlsSettings, onInsecure,
+    tlsAllowedVersions, tlsCredentials, tlsServerHooks, tlsSessionManager)
+
+import System.IO.Error (ioeGetErrorType)
+
+#ifdef QUIC_ENABLED
+import Network.QUIC.Internal qualified as Q
+#endif
 
 import Network.HProx.Config
 import Network.HProx.Impl
@@ -35,6 +52,13 @@ data ProxyRuntime = ProxyRuntime
   { runtimeProxySettings :: !ProxySettings
   , runtimeReverseRoutes :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
   }
+
+data WarpRuntimePlan = WarpRuntimePlan
+  { runtimeBindHost    :: !String
+  , runtimePort        :: !Int
+  , runtimeServerName  :: !BS8.ByteString
+  , runtimeNoParsePath :: !Bool
+  } deriving (Eq, Show)
 
 buildProxyRuntime :: Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxyRuntime
 buildProxyRuntime Config{..} logger pauth isSSL = ProxyRuntime
@@ -61,6 +85,33 @@ buildProxyApplication isSSL pset manager fallback =
         httpProxy pset manager $
           reverseProxy pset manager fallback
 
+
+buildWarpRuntimePlan :: Config -> WarpRuntimePlan
+buildWarpRuntimePlan Config{..} = WarpRuntimePlan
+  { runtimeBindHost = fromMaybe "*6" _bind
+  , runtimePort = _port
+  , runtimeServerName = _name
+  , runtimeNoParsePath = True
+  }
+
+shouldSuppressAccessLog :: Request -> Bool
+shouldSuppressAccessLog req = rawPathInfo req == "/.hprox/health"
+
+shouldIgnoreRuntimeException :: LogLevel -> SomeException -> Bool
+shouldIgnoreRuntimeException logLevel ex
+  | logLevel > DEBUG = True
+  | not (defaultShouldDisplayException ex) = True
+  | Just ioe <- fromException ex
+  , ioeGetErrorType ioe == EOF = True
+  | Just (H2.BadThingHappen ex') <- fromException ex = shouldIgnoreRuntimeException logLevel ex'
+  | Just (_ :: H2.HTTP2Error) <- fromException ex = True
+#ifdef QUIC_ENABLED
+  | Just (Q.BadThingHappen ex') <- fromException ex = shouldIgnoreRuntimeException logLevel ex'
+  | Just (_ :: Q.QUICException) <- fromException ex = True
+#endif
+  | Just (_ :: WarpTLSException) <- fromException ex = True
+  | Just ConnectionClosedByPeer <- fromException ex = True
+  | otherwise = False
 
 loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
 loadTlsCredentials certFiles =
