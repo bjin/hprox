@@ -6,6 +6,7 @@ module Network.HProx.Headers
   ( cdnLoopHeader
   , forwardedHostHeader
   , forwardedProtoHeader
+  , headerValueEquals
   , isCDNHeader
   , isForwardedHeader
   , isProxyHeader
@@ -41,6 +42,9 @@ isForwardedHeader header = "x-forwarded" `BS.isPrefixOf` CI.foldedCase header
 
 isCDNHeader :: HeaderName -> Bool
 isCDNHeader header = "cf-" `BS.isPrefixOf` CI.foldedCase header || header == cdnLoopHeader
+
+headerValueEquals :: BS.ByteString -> BS.ByteString -> Bool
+headerValueEquals expected actual = CI.mk expected == CI.mk actual
 
 isProxyStripHeader :: HeaderName -> Bool
 isProxyStripHeader header =

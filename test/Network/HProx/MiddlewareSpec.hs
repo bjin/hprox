@@ -68,14 +68,14 @@ spec = do
         , "}"
         ]
 
-    it "treats non-lowercase forwarded proto values as insecure" $ do
+    it "treats forwarded proto values case-insensitively" $ do
       response <- runApp pacProvider $ (requestPath "/.hprox/config.pac")
         { requestHeaders = [("x-forwarded-host", "proxy.example"), ("x-forwarded-proto", "HTTPS")]
         }
       simpleStatus response `shouldBe` HT.status200
       simpleBody response `shouldBe` LBS8.unlines
         [ "function FindProxyForURL(url, host) {"
-        , "  return \"PROXY proxy.example:80\";"
+        , "  return \"HTTPS proxy.example:443\";"
         , "}"
         ]
 

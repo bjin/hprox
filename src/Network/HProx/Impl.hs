@@ -152,7 +152,7 @@ pacProvider fallback req respond
     | pathInfo req == [".hprox", "config.pac"],
       Just host' <- lookup forwardedHostHeader (requestHeaders req) <|> requestHeaderHost req =
         let issecure = case lookup forwardedProtoHeader (requestHeaders req) of
-                Just proto -> proto == "https"
+                Just proto -> headerValueEquals "https" proto
                 Nothing    -> isSecure req
             scheme = if issecure then "HTTPS" else "PROXY"
             defaultPort = if issecure then ":443" else ":80"
@@ -227,7 +227,7 @@ selectHttpProxyTarget req
     isRawPathProxy = rawPathPrefix `BS.isPrefixOf` rawPath
     hasProxyHeader = any (isProxyHeader.fst) (requestHeaders req)
     scheme = lookup xSchemeHeader (requestHeaders req)
-    isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && scheme == Just "http" && isSecure req
+    isHTTP2Proxy = HT.httpMajor (httpVersion req) >= 2 && maybe False (headerValueEquals "http") scheme && isSecure req
 
     (hostPortP, newRawPathP) = BS8.span (/='/') $
         BS.drop (BS.length rawPathPrefix) rawPath

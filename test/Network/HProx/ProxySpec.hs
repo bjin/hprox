@@ -62,6 +62,14 @@ spec = do
           , httpProxyTargetRawPath = "/resource"
           }
 
+    it "treats HTTP/2 proxy scheme values case-insensitively" $
+      selectHttpProxyTarget http2ProxyRequest { requestHeaders = [("X-Scheme", "HTTP")] }
+        `shouldBe` Just HttpProxyTarget
+          { httpProxyTargetHost = "example.com"
+          , httpProxyTargetPort = 80
+          , httpProxyTargetRawPath = "/resource"
+          }
+
     it "rejects malformed explicit ports in raw absolute-URI requests" $
       selectHttpProxyTarget rawProxyRequest { rawPathInfo = "http://example.com:not-a-port/resource" }
         `shouldBe` Nothing

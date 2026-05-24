@@ -21,3 +21,8 @@ spec =
       map isProxyStripHeader ["Proxy-Connection", "X-Forwarded-Proto", "cf-ray", xRealIPHeader, xSchemeHeader]
         `shouldBe` replicate 5 True
       isProxyStripHeader "Authorization" `shouldBe` False
+
+    it "compares protocol header values case-insensitively" $ do
+      headerValueEquals "https" "HTTPS" `shouldBe` True
+      headerValueEquals "http" "HtTp" `shouldBe` True
+      headerValueEquals "http" "https" `shouldBe` False
