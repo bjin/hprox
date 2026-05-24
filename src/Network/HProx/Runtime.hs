@@ -7,6 +7,8 @@
 
 module Network.HProx.Runtime
   ( ProxyRuntime(..)
+  , RunnerPlan(..)
+  , StartupStep(..)
   , WarpRuntimePlan(..)
   , buildProxyApplication
   , buildProxyRuntime
@@ -18,9 +20,12 @@ module Network.HProx.Runtime
   , lookupSNICredentials
   , lookupSNIHost
   , runtimeExceptionToLog
+  , selectRunnerPlan
   , shouldIgnoreRuntimeException
   , shouldSuppressAccessLog
+  , shouldWrapDNSOverHTTPS
   , sniPatternMatches
+  , startupOrder
   ) where
 
 import Control.Exception           (SomeException, displayException, fromException)
@@ -66,6 +71,25 @@ data WarpRuntimePlan = WarpRuntimePlan
   , runtimeNoParsePath :: !Bool
   } deriving (Eq, Show)
 
+data RunnerPlan
+  = PlainWarpRunner
+  | TlsWarpRunner
+  | QuicAndTlsRunner !Int
+  deriving (Eq, Show)
+
+data StartupStep
+  = InitializeLogger
+  | LogStartup
+  | ReadCertificates
+  | CreateTlsSessionManager
+  | BuildSettingsAndRunner
+  | LoadProxyAuth
+  | CreateHttpManager
+  | BuildProxyApplication
+  | LogRuntimeConfig
+  | StartRunner
+  deriving (Eq, Show)
+
 buildProxyRuntime :: Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxyRuntime
 buildProxyRuntime Config{..} logger pauth isSSL = ProxyRuntime
   { runtimeProxySettings = ProxySettings
@@ -91,6 +115,34 @@ buildProxyApplication isSSL pset manager fallback =
         httpProxy pset manager $
           reverseProxy pset manager fallback
 
+
+selectRunnerPlan :: Config -> [(String, a)] -> RunnerPlan
+#ifdef QUIC_ENABLED
+selectRunnerPlan Config{..} certs = case certs of
+  [] -> PlainWarpRunner
+  _  -> maybe TlsWarpRunner QuicAndTlsRunner _quic
+#else
+selectRunnerPlan _ certs = case certs of
+  [] -> PlainWarpRunner
+  _  -> TlsWarpRunner
+#endif
+
+shouldWrapDNSOverHTTPS :: Config -> Bool
+shouldWrapDNSOverHTTPS Config{..} = isJust _doh
+
+startupOrder :: [StartupStep]
+startupOrder =
+  [ InitializeLogger
+  , LogStartup
+  , ReadCertificates
+  , CreateTlsSessionManager
+  , BuildSettingsAndRunner
+  , LoadProxyAuth
+  , CreateHttpManager
+  , BuildProxyApplication
+  , LogRuntimeConfig
+  , StartRunner
+  ]
 
 buildWarpRuntimePlan :: Config -> WarpRuntimePlan
 buildWarpRuntimePlan Config{..} = WarpRuntimePlan

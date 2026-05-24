@@ -47,6 +47,42 @@ spec = do
           , runtimeNoParsePath = True
           }
 
+
+  describe "runner selection" $ do
+    it "selects the plain Warp runner when no certificates are configured" $
+      selectRunnerPlan defaultConfig [] `shouldBe` PlainWarpRunner
+
+    it "selects the TLS Warp runner when certificates are configured" $
+      selectRunnerPlan defaultConfig [("example.com", ())] `shouldBe` TlsWarpRunner
+
+#ifdef QUIC_ENABLED
+    it "selects concurrent QUIC and TLS when QUIC is configured with certificates" $
+      selectRunnerPlan defaultConfig { _quic = Just 443 } [("example.com", ())]
+        `shouldBe` QuicAndTlsRunner 443
+
+    it "does not select QUIC without configured certificates" $
+      selectRunnerPlan defaultConfig { _quic = Just 443 } [] `shouldBe` PlainWarpRunner
+#endif
+
+  describe "DoH wrapping decision" $ do
+    it "wraps the application only when a DoH resolver is configured" $ do
+      shouldWrapDNSOverHTTPS defaultConfig `shouldBe` False
+      shouldWrapDNSOverHTTPS defaultConfig { _doh = Just "127.0.0.1:53" } `shouldBe` True
+
+  describe "startup side-effect order" $
+    it "documents the current run startup order" $
+      startupOrder `shouldBe`
+        [ InitializeLogger
+        , LogStartup
+        , ReadCertificates
+        , CreateTlsSessionManager
+        , BuildSettingsAndRunner
+        , LoadProxyAuth
+        , CreateHttpManager
+        , BuildProxyApplication
+        , LogRuntimeConfig
+        , StartRunner
+        ]
   describe "access log filtering" $ do
     it "suppresses health-check access logs" $
       shouldSuppressAccessLog defaultRequest { rawPathInfo = "/.hprox/health" } `shouldBe` True
