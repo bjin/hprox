@@ -3,7 +3,7 @@ version:             0.7.0
 github:              "bjin/hprox"
 license:             Apache-2.0
 author:              "Bin Jin"
-maintainer:          "bjin@ctrl-d.org"
+maintainer:          "bjin@protonmail.com"
 copyright:           "2026 Bin Jin"
 
 synopsis:            a lightweight HTTP proxy server, and more
