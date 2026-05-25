@@ -1,0 +1,72 @@
+name: macos-aarch64
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos-aarch64:
+    runs-on: macos-15
+
+    env:
+      STACK_VER: "3.9.1"
+      STACK_BIN_URL: "https://github.com/commercialhaskell/stack/releases/download/v3.9.1/stack-3.9.1-osx-aarch64.tar.gz"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Stack cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.stack
+          key: gha-hprox-macos-aarch64-stack-${{ hashFiles('stack.yaml') }}
+
+      - name: Install Stack
+        run: |
+          curl -L "$STACK_BIN_URL" | tar xz --strip-components=1 "stack-${STACK_VER}-osx-aarch64/stack"
+          ./stack --version
+
+      - name: Stack setup
+        run: ./stack setup
+
+      - name: Build
+        run: |
+          ./stack --no-terminal --no-interleaved-output \
+            install --flag hprox:quic \
+            --ghc-options -split-sections \
+            --ghc-options -O \
+            --ghc-options -optc-Os
+
+      - name: Test
+        run: |
+          ./stack --no-terminal --no-interleaved-output \
+            test --flag hprox:quic \
+            --ghc-options -split-sections \
+            --ghc-options -O \
+            --ghc-options -optc-Os
+
+      - name: Package
+        run: |
+          mkdir -p release
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="$(./stack query locals hprox version)-$(git rev-parse --short HEAD)"
+          fi
+          tar czvf "release/hprox-${VER}-darwin-aarch64.tar.gz" -C ~/.local/bin hprox
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hprox-darwin-aarch64
+          path: release/hprox-*.tar.gz
+
+      - name: Cleanup Stack cache
+        run: rm -rf ~/.stack/pantry/hackage ~/.stack/programs

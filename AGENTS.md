@@ -110,7 +110,7 @@ When changing behavior, add or update the focused spec first. Prefer testing the
 CI builds release artifacts and now runs tests after build/install:
 
 - CircleCI: Linux x86_64, Linux aarch64, Windows.
-- Cirrus CI: macOS aarch64.
+- GitHub Actions: macOS aarch64.
 
 Keep CI commands aligned with local Stack flags when changing package flags, resolver, or test setup.
 
