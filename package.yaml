@@ -113,7 +113,7 @@ executables:
     - condition: flag(static)
       ghc-options: -optl-static
     dependencies:
-    - base
+    - base >= 4.12 && < 5
     - bytestring
     - hprox
     - http-types
@@ -131,7 +131,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - async
-    - base
+    - base >= 4.12 && < 5
     - base64-bytestring
     - binary
     - bytestring
