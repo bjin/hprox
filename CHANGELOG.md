@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.7.0
+
 ### Added
 - Added an Hspec-based `hprox-test` suite with characterization coverage for CLI/default parsing, pure helpers, auth-file loading and rewriting, middleware endpoints, reverse-proxy routing and rewrites, HTTP/CONNECT proxy decisions, TLS/SNI selection, Warp/runtime exception handling, runner selection, DoH behavior, and naiveproxy padding.
 - Added internal domain/runtime seams for `Config`, auth loading, reverse routes, proxy runtime construction, TLS/SNI setup, Warp settings, runner selection, platform-specific Unix/QUIC startup, log output parsing, header policy, DoH requests, and runtime configuration.
@@ -49,6 +51,7 @@
 - Hardened SNI matching to use ASCII case-insensitive host checks and reject invalid wildcard matches
 - Disabled QUIC 0-RTT by default to reduce replay and forward-secrecy risk when accepting early data
 - Verified real/effective UID/GID and supplementary groups after privilege drop and enforced stricter safety checks for user/group transitions
+
 ## 0.6.5
 
 - bump stack dependencies
