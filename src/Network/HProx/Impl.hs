@@ -10,6 +10,7 @@ module Network.HProx.Impl
   , forceSSL
   , healthCheckProvider
   , httpConnectProxy
+  , httpConnectProxyWith
   , httpGetProxy
   , httpProxy
   , logRequest
@@ -21,7 +22,7 @@ module Network.HProx.Impl
 
 import Control.Applicative        ((<|>))
 import Control.Concurrent.Async   (cancel, wait, waitEither, withAsync)
-import Control.Exception          (SomeException, throwIO, try)
+import Control.Exception          (IOException, SomeException, throwIO, try)
 import Control.Monad              (forM_, unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
 import Data.Binary.Builder        qualified as BB
@@ -332,7 +333,13 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
         outgoingStripHeader header = header == HT.hHost || isProxyStripHeader header
 
 httpConnectProxy :: ProxySettings -> Middleware
-httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
+httpConnectProxy = httpConnectProxyWith CN.runTCPClient
+
+httpConnectProxyWith
+    :: (CN.ClientSettings -> (CN.AppData -> IO ResponseReceived) -> IO ResponseReceived)
+    -> ProxySettings
+    -> Middleware
+httpConnectProxyWith runTCPClient pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
     authorized <- checkAuth pset req
     if authorized
       then do
@@ -340,7 +347,7 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
             logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
                            " for " <> logRequest req
           responseStarted <- newIORef False
-          connected <- tryAndCatchAll $ CN.runTCPClient settings (respondResponse responseStarted)
+          connected <- tryIOException $ runTCPClient settings (respondResponse responseStarted)
           case connected of
               Right received -> return received
               Left ex        -> do
@@ -365,6 +372,9 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
 
     connectFailureResponse = responseKnownLength HT.status502 [("Content-Type", "text/plain")]
         "CONNECT upstream connection failed"
+
+    tryIOException :: IO a -> IO (Either IOException a)
+    tryIOException = try
 
     tryAndCatchAll :: IO a -> IO (Either SomeException a)
     tryAndCatchAll = try
@@ -422,4 +432,4 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
             void $ runStreams 5
                 (runConduit clientToServer)
                 (runConduit serverToClient)
-httpConnectProxy _ fallback req respond = fallback req respond
+httpConnectProxyWith _ _ fallback req respond = fallback req respond

@@ -7,7 +7,7 @@ module Network.HProx.ProxySpec
   ) where
 
 import Control.Concurrent.Async   (withAsync)
-import Control.Exception          (SomeException, bracket, try)
+import Control.Exception          (AsyncException(..), SomeException, bracket, throwIO, try)
 import Control.Monad              (unless)
 import Data.ByteString.Base64     qualified as B64
 import Data.ByteString.Char8      qualified as BS8
@@ -112,6 +112,20 @@ spec = do
           Right _ -> expectationFailure "response failure was swallowed"
         renderedLogs <- LBS.toStrict . LBS.concat . reverse <$> readIORef logs
         renderedLogs `shouldNotSatisfy` BS8.isInfixOf "CONNECT upstream failure"
+
+    it "does not log upstream failure when HTTP/2 cancels before the tunnel response starts" $ do
+      logs <- newIORef []
+      let loggingSettings = authorizedSettings
+            { logger = \_ msg -> modifyIORef' logs (LBS.fromStrict (FL.fromLogStr msg) :)
+            }
+          cancelledBeforeResponse _ _ = throwIO ThreadKilled
+          respondOk _ = ioError (userError "respond should not be called")
+      result <- try (httpConnectProxyWith cancelledBeforeResponse loggingSettings fallback (connectRequestFor "127.0.0.1" 443 HT.http20) respondOk) :: IO (Either SomeException ResponseReceived)
+      case result of
+        Left _  -> return ()
+        Right _ -> expectationFailure "pre-response cancellation was swallowed"
+      renderedLogs <- LBS.toStrict . LBS.concat . reverse <$> readIORef logs
+      renderedLogs `shouldNotSatisfy` BS8.isInfixOf "CONNECT upstream failure"
 
   describe "HTTP proxy fallback decisions" $
     it "falls through for non-proxy GET requests" $ do
