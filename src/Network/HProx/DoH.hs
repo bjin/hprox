@@ -25,9 +25,9 @@ import Network.Wai
 import Network.HProx.Util
 
 data DoHRequest = DoHRequest
-  { dohIdentifier :: !DNS.Identifier
-  , dohQuestion   :: !Question
-  }
+    { dohIdentifier :: !DNS.Identifier
+    , dohQuestion   :: !Question
+    }
   deriving (Eq, Show)
 
 maxPostBodyLength :: Int
@@ -39,7 +39,7 @@ createResolver remote handle = do
     DNS.withResolver seed handle
   where
     (h, p) = parseHostPortWithDefault 53 (BS8.pack remote)
-    info   = DNS.RCHostPort (BS8.unpack h) (fromIntegral p)
+    info = DNS.RCHostPort (BS8.unpack h) (fromIntegral p)
 
     conf = DNS.defaultResolvConf { resolvInfo = info }
 
@@ -85,15 +85,15 @@ readRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
 readRequestBody readChunk expectedLength = go expectedLength []
   where
     go remaining chunks
-      | remaining <= 0 = return $ BS.concat $ reverse chunks
-      | otherwise      = do
-          chunk <- readChunk
-          if BS.null chunk
-            then return $ BS.concat $ reverse chunks
-            else do
-              let (accepted, _extra) = BS.splitAt remaining chunk
-                  nextRemaining = remaining - BS.length accepted
-              go nextRemaining (accepted : chunks)
+        | remaining <= 0 = return $ BS.concat $ reverse chunks
+        | otherwise      = do
+            chunk <- readChunk
+            if BS.null chunk
+              then return $ BS.concat $ reverse chunks
+              else do
+                  let (accepted, _extra) = BS.splitAt remaining chunk
+                      nextRemaining = remaining - BS.length accepted
+                  go nextRemaining (accepted : chunks)
 
 readChunkedRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
 readChunkedRequestBody readChunk maxLength = go 0 []
@@ -103,10 +103,10 @@ readChunkedRequestBody readChunk maxLength = go 0 []
         if BS.null chunk
           then return $ BS.concat $ reverse chunks
           else do
-            let nextTotal = total + BS.length chunk
-            if nextTotal > maxLength
-              then return ""
-              else go nextTotal (chunk : chunks)
+              let nextTotal = total + BS.length chunk
+              if nextTotal > maxLength
+                then return ""
+                else go nextTotal (chunk : chunks)
 
 decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
 decodeDoHQuery dnsQuery =

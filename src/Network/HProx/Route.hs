@@ -25,29 +25,29 @@ import Network.HProx.Headers
 import Network.HProx.Util
 
 data ReverseRoute = ReverseRoute
-  { routeHost     :: !(Maybe BS8.ByteString)
-  , routePrefix   :: !BS8.ByteString
-  , routeUpstream :: !BS8.ByteString
-  }
+    { routeHost     :: !(Maybe BS8.ByteString)
+    , routePrefix   :: !BS8.ByteString
+    , routeUpstream :: !BS8.ByteString
+    }
   deriving (Eq, Show)
 
 data ReverseProxyRewrite = ReverseProxyRewrite
-  { rewriteRoute       :: !ReverseRoute
-  , rewriteRawPath     :: !BS8.ByteString
-  , rewriteHeaders     :: !RequestHeaders
-  , rewriteRequestHost :: !(Maybe BS8.ByteString)
-  , rewriteUpstream    :: !BS8.ByteString
-  , rewritePort        :: !Int
-  , rewriteSecure      :: !Bool
-  }
+    { rewriteRoute       :: !ReverseRoute
+    , rewriteRawPath     :: !BS8.ByteString
+    , rewriteHeaders     :: !RequestHeaders
+    , rewriteRequestHost :: !(Maybe BS8.ByteString)
+    , rewriteUpstream    :: !BS8.ByteString
+    , rewritePort        :: !Int
+    , rewriteSecure      :: !Bool
+    }
   deriving (Eq, Show)
 
 fromReverseRouteTuple :: (Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString) -> ReverseRoute
 fromReverseRouteTuple (host, prefix, upstream) = ReverseRoute
-  { routeHost     = host
-  , routePrefix   = normalizeRoutePrefix prefix
-  , routeUpstream = upstream
-  }
+    { routeHost     = host
+    , routePrefix   = normalizeRoutePrefix prefix
+    , routeUpstream = upstream
+    }
 
 sortReverseRoutes :: [ReverseRoute] -> [ReverseRoute]
 sortReverseRoutes = sortOn $ \ReverseRoute{..} -> Down (isJust routeHost, BS8.length routePrefix)
@@ -59,18 +59,18 @@ hostMatches ReverseRoute{ routeHost = Just domain } (Just host) = CI.mk domain =
 
 prefixMatches :: ReverseRoute -> BS8.ByteString -> Bool
 prefixMatches ReverseRoute{..} rawPath
-  | prefix == "/"     = True
-  | rawPath == prefix = True
-  | otherwise         = prefix `BS8.isPrefixOf` rawPath
-    && BS8.length rawPath > prefixLength
-    && BS8.index rawPath prefixLength == '/'
+    | prefix == "/"     = True
+    | rawPath == prefix = True
+    | otherwise         = prefix `BS8.isPrefixOf` rawPath
+        && BS8.length rawPath > prefixLength
+        && BS8.index rawPath prefixLength == '/'
   where
     prefix = normalizeRoutePrefix routePrefix
     prefixLength = BS8.length prefix
 
 findMatchingRoute :: [ReverseRoute] -> Maybe BS8.ByteString -> BS8.ByteString -> Maybe ReverseRoute
 findMatchingRoute routes requestHost rawPath =
-  listToMaybe $ filter matches $ sortReverseRoutes routes
+    listToMaybe $ filter matches $ sortReverseRoutes routes
   where
     parsedHost = fmap hostOnly requestHost
     matches route = hostMatches route parsedHost && prefixMatches route rawPath
@@ -80,27 +80,27 @@ hostOnly host = maybe host fst (parseHostPort host)
 
 normalizeRoutePrefix :: BS8.ByteString -> BS8.ByteString
 normalizeRoutePrefix prefix
-  | BS8.null prefix = "/"
-  | otherwise       = stripTrailingSlash prefixed
+    | BS8.null prefix = "/"
+    | otherwise       = stripTrailingSlash prefixed
   where
     prefixed
-      | "/" `BS8.isPrefixOf` prefix = prefix
-      | otherwise                   = "/" <> prefix
+        | "/" `BS8.isPrefixOf` prefix = prefix
+        | otherwise                   = "/" <> prefix
 
     stripTrailingSlash value
-      | BS8.length value > 1 && "/" `BS8.isSuffixOf` value = stripTrailingSlash (BS8.init value)
-      | otherwise                                             = value
+        | BS8.length value > 1 && "/" `BS8.isSuffixOf` value = stripTrailingSlash (BS8.init value)
+        | otherwise                                          = value
 
 rewriteReverseProxyRequest :: ReverseRoute -> RequestHeaders -> BS8.ByteString -> ReverseProxyRewrite
 rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = ReverseProxyRewrite
-  { rewriteRoute       = route
-  , rewriteRawPath     = rewritePath route rawPath
-  , rewriteHeaders     = (HT.hHost, upstreamHost) : filter keepHeader requestHeaders
-  , rewriteRequestHost = Just upstreamHost
-  , rewriteUpstream    = upstreamHost
-  , rewritePort        = upstreamPort
-  , rewriteSecure      = upstreamPort == 443
-  }
+    { rewriteRoute       = route
+    , rewriteRawPath     = rewritePath route rawPath
+    , rewriteHeaders     = (HT.hHost, upstreamHost) : filter keepHeader requestHeaders
+    , rewriteRequestHost = Just upstreamHost
+    , rewriteUpstream    = upstreamHost
+    , rewritePort        = upstreamPort
+    , rewriteSecure      = upstreamPort == 443
+    }
   where
     (upstreamHost, upstreamPort) = parseHostPortWithDefault 80 routeUpstream
 
@@ -108,16 +108,16 @@ rewriteReverseProxyRequest route@ReverseRoute{..} requestHeaders rawPath = Rever
 
 rewritePath :: ReverseRoute -> BS8.ByteString -> BS8.ByteString
 rewritePath route@ReverseRoute{..} rawPath
-  | not (prefixMatches route rawPath) = rawPath
-  | prefix == "/"                     = ensureLeadingSlash rawPath
-  | otherwise                         =
-      case BS8.drop (BS8.length prefix) rawPath of
-        ""   -> "/"
-        rest -> ensureLeadingSlash rest
+    | not (prefixMatches route rawPath) = rawPath
+    | prefix == "/"                     = ensureLeadingSlash rawPath
+    | otherwise                         =
+        case BS8.drop (BS8.length prefix) rawPath of
+            ""   -> "/"
+            rest -> ensureLeadingSlash rest
   where
     prefix = normalizeRoutePrefix routePrefix
 
 ensureLeadingSlash :: BS8.ByteString -> BS8.ByteString
 ensureLeadingSlash path
-  | "/" `BS8.isPrefixOf` path = path
-  | otherwise                 = "/" <> path
+    | "/" `BS8.isPrefixOf` path = path
+    | otherwise                 = "/" <> path

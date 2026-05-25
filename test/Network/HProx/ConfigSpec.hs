@@ -80,6 +80,7 @@ spec = do
       _rev remoteOnly `shouldBe` [(Nothing, "/", "backend:80")]
       _rev prefixOnly `shouldBe` [(Nothing, "/api/", "backend:80")]
       _rev domainAndPrefix `shouldBe` [(Just "example.com", "/api/", "backend:80")]
+
     it "accepts only bounded listener ports" $ do
       low <- parseConfig ["--port", "1"]
       high <- parseConfig ["--port", "65535"]

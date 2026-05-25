@@ -45,16 +45,16 @@ quicUse0RTT :: Bool
 quicUse0RTT = False
 
 runQuicAndTls
-  :: Logger
-  -> Maybe String
-  -> Settings
-  -> TLSSettings
-  -> (Maybe String -> IO TLS.Credentials)
-  -> TLS.SessionManager
-  -> TLS.Credential
-  -> Int
-  -> Application
-  -> IO ()
+    :: Logger
+    -> Maybe String
+    -> Settings
+    -> TLSSettings
+    -> (Maybe String -> IO TLS.Credentials)
+    -> TLS.SessionManager
+    -> TLS.Credential
+    -> Int
+    -> Application
+    -> IO ()
 #ifdef QUIC_ENABLED
 runQuicAndTls logger bind settings tlsSettings onSNI sessionManager defaultCert qport app = do
     logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "all interfaces" bind) <> ":" <> toLogStr qport
@@ -67,21 +67,21 @@ alpn :: Q.Version -> [BS8.ByteString] -> IO BS8.ByteString
 alpn _ protocols = return $ fromMaybe "" $ find (== "h3") protocols
 
 buildQuicServerConfig
-  :: Maybe String
-  -> (Maybe String -> IO TLS.Credentials)
-  -> TLS.SessionManager
-  -> TLS.Credential
-  -> Int
-  -> Q.ServerConfig
+    :: Maybe String
+    -> (Maybe String -> IO TLS.Credentials)
+    -> TLS.SessionManager
+    -> TLS.Credential
+    -> Int
+    -> Q.ServerConfig
 buildQuicServerConfig bind onSNI sessionManager cert port = Q.defaultServerConfig
-  { Q.scAddresses      = [(fromString host, fromIntegral bindPort) | (host, bindPort) <- quicAddressPlan bind port]
-  , Q.scVersions       = [Q.Version1, Q.Version2]
-  , Q.scCredentials    = TLS.Credentials [cert]
-  , Q.scALPN           = Just alpn
-  , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
-  , Q.scUse0RTT        = quicUse0RTT
-  , Q.scSessionManager = sessionManager
-  }
+    { Q.scAddresses      = [(fromString host, fromIntegral bindPort) | (host, bindPort) <- quicAddressPlan bind port]
+    , Q.scVersions       = [Q.Version1, Q.Version2]
+    , Q.scCredentials    = TLS.Credentials [cert]
+    , Q.scALPN           = Just alpn
+    , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
+    , Q.scUse0RTT        = quicUse0RTT
+    , Q.scSessionManager = sessionManager
+    }
 #else
 runQuicAndTls _ _ settings tlsSettings _ _ _ _ app = runTLS tlsSettings settings app
 #endif

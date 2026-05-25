@@ -48,8 +48,8 @@ data PasswordSalted = PasswordSalted !BS.ByteString !BS.ByteString
 splitBy :: Eq a => a -> [a] -> NonEmpty [a]
 splitBy _ [] = NE.singleton []
 splitBy c (x:xs)
-  | c == x    = [] <| splitBy c xs
-  | otherwise = let y :| ys = splitBy c xs in (x:y) :| ys
+    | c == x    = [] <| splitBy c xs
+    | otherwise = let y :| ys = splitBy c xs in (x:y) :| ys
 
 passwordReader :: BS.ByteString -> Maybe (BS.ByteString, Password)
 passwordReader line = case BS8.split ':' line of

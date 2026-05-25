@@ -18,6 +18,7 @@ import Network.HProx.RouteSpec      qualified as RouteSpec
 import Network.HProx.RuntimeSpec    qualified as RuntimeSpec
 import Network.HProx.TLSSpec        qualified as TLSSpec
 import Test.Hspec
+
 main :: IO ()
 main = hspec $ do
   describe "hprox test suite" $

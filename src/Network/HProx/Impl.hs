@@ -53,21 +53,21 @@ import Network.HProx.Route
 import Network.HProx.Util
 
 data ProxySettings = ProxySettings
-  { proxyAuth      :: !(Maybe (BS.ByteString -> Bool))
-  , passPrompt     :: !(Maybe BS.ByteString)
-  , wsRemote       :: !(Maybe BS.ByteString)
-  , revRemoteMap   :: ![ReverseRoute]
-  , hideProxyAuth  :: !Bool
-  , naivePadding   :: !Bool
-  , acmeThumbprint :: !(Maybe BS.ByteString)
-  , logger         :: !Logger
-  }
+    { proxyAuth      :: !(Maybe (BS.ByteString -> Bool))
+    , passPrompt     :: !(Maybe BS.ByteString)
+    , wsRemote       :: !(Maybe BS.ByteString)
+    , revRemoteMap   :: ![ReverseRoute]
+    , hideProxyAuth  :: !Bool
+    , naivePadding   :: !Bool
+    , acmeThumbprint :: !(Maybe BS.ByteString)
+    , logger         :: !Logger
+    }
 
 data HttpProxyTarget = HttpProxyTarget
-  { httpProxyTargetHost    :: !BS.ByteString
-  , httpProxyTargetPort    :: !Int
-  , httpProxyTargetRawPath :: !BS.ByteString
-  }
+    { httpProxyTargetHost    :: !BS.ByteString
+    , httpProxyTargetPort    :: !Int
+    , httpProxyTargetRawPath :: !BS.ByteString
+    }
   deriving (Eq, Show)
 
 renderHttpProxyAuthority :: HttpProxyTarget -> BS.ByteString
@@ -79,10 +79,10 @@ renderAuthorityWithDefault defaultPort host port
     | otherwise           = BS.concat [host, ":", BS8.pack (show port)]
 
 logRequest :: Request -> LogStr
-logRequest req = toLogStr (requestMethod req) <>
-    " " <> hostname <> toLogStr (rawPathInfo req) <>
-    " " <> toLogStr (show $ httpVersion req) <>
-    " " <> (if isSecure req then "(tls) " else "")
+logRequest req = toLogStr (requestMethod req) <> " "
+    <> hostname <> toLogStr (rawPathInfo req) <> " "
+    <> toLogStr (show $ httpVersion req) <> " "
+    <> (if isSecure req then "(tls) " else "")
     <> toLogStr (show $ remoteHost req)
   where
     isConnect = requestMethod req == "CONNECT"
@@ -114,11 +114,11 @@ redirectLocation :: Request -> BS.ByteString
 redirectLocation req
   | Just HttpProxyTarget{..} <- selectHttpProxyTarget req =
       BS.concat
-        [ "https://"
-        , renderRedirectAuthority httpProxyTargetHost httpProxyTargetPort
-        , httpProxyTargetRawPath
-        , rawQueryString req
-        ]
+          [ "https://"
+          , renderRedirectAuthority httpProxyTargetHost httpProxyTargetPort
+          , httpProxyTargetRawPath
+          , rawQueryString req
+          ]
   | Just host <- requestHeaderHost req =
       BS.concat ["https://", host, originFormPathAndQuery req]
   | otherwise = "https://"
@@ -152,19 +152,18 @@ checkAuth ProxySettings{..} req = case (proxyAuth, authRsp) of
 
 parseBasicProxyAuthorization :: BS.ByteString -> Maybe BS.ByteString
 parseBasicProxyAuthorization authHeader =
-  case BS8.words authHeader of
-      [scheme, payload]
-        | CI.mk scheme == ("basic" :: CI.CI BS.ByteString) ->
-            either (const Nothing) Just (B64.decode payload)
-      _ -> Nothing
+    case BS8.words authHeader of
+        [scheme, payload] | CI.mk scheme == ("basic" :: CI.CI BS.ByteString)
+              -> either (const Nothing) Just (B64.decode payload)
+        _otherwise
+              -> Nothing
 
 redactedCredential :: Maybe BS.ByteString -> BS.ByteString
 redactedCredential Nothing = "<invalid>"
 redactedCredential (Just decoded) =
-  case BS8.break (== ':') decoded of
-      (username, password)
-        | not (BS.null password) -> BS.concat [username, ":<redacted>"]
-      _ -> "<invalid>"
+    case BS8.break (== ':') decoded of
+        (username, password) | not (BS.null password) -> BS.concat [username, ":<redacted>"]
+        _otherwise                                    -> "<invalid>"
 
 parseConnectProxy :: Request -> Maybe (BS.ByteString, Int)
 parseConnectProxy req
@@ -231,21 +230,21 @@ reverseProxy ProxySettings{..} mgr fallback =
     settings = defaultWaiProxySettings { wpsSetIpHeader = SIHNone }
 
     proxyResponseFor req =
-      case findMatchingRoute revRemoteMap (requestHeaderHost req) (rawPathInfo req) of
-        Nothing    -> WPRApplication fallback
-        Just route -> routeProxyResponse route req
+        case findMatchingRoute revRemoteMap (requestHeaderHost req) (rawPathInfo req) of
+            Nothing    -> WPRApplication fallback
+            Just route -> routeProxyResponse route req
 
     routeProxyResponse route req =
-      let rewrite = rewriteReverseProxyRequest route (requestHeaders req) (rawPathInfo req)
-          nreq = req
-            { requestHeaders = rewriteHeaders rewrite
-            , requestHeaderHost = rewriteRequestHost rewrite
-            , rawPathInfo = rewriteRawPath rewrite
-            }
-          dest = ProxyDest (rewriteUpstream rewrite) (rewritePort rewrite)
-      in if rewriteSecure rewrite
-           then WPRModifiedRequestSecure nreq dest
-           else WPRModifiedRequest nreq dest
+        let rewrite = rewriteReverseProxyRequest route (requestHeaders req) (rawPathInfo req)
+            nreq = req
+                { requestHeaders = rewriteHeaders rewrite
+                , requestHeaderHost = rewriteRequestHost rewrite
+                , rawPathInfo = rewriteRawPath rewrite
+                }
+            dest = ProxyDest (rewriteUpstream rewrite) (rewritePort rewrite)
+        in if rewriteSecure rewrite
+             then WPRModifiedRequestSecure nreq dest
+             else WPRModifiedRequest nreq dest
 
 selectHttpProxyTarget :: Request -> Maybe HttpProxyTarget
 selectHttpProxyTarget req
@@ -253,18 +252,18 @@ selectHttpProxyTarget req
     | isRawPathProxy                   = do
         (host, port) <- parseProxyHostPortWithDefault defaultPort hostPortP
         return HttpProxyTarget
-          { httpProxyTargetHost    = host
-          , httpProxyTargetPort    = port
-          , httpProxyTargetRawPath = newRawPathP
-          }
+            { httpProxyTargetHost    = host
+            , httpProxyTargetPort    = port
+            , httpProxyTargetRawPath = newRawPathP
+            }
     | isHTTP2Proxy || hasProxyHeader   = do
         hostPort <- requestHeaderHost req
         (host, port) <- parseProxyHostPortWithDefault defaultPort hostPort
         return HttpProxyTarget
-          { httpProxyTargetHost    = host
-          , httpProxyTargetPort    = port
-          , httpProxyTargetRawPath = rawPath
-          }
+            { httpProxyTargetHost    = host
+            , httpProxyTargetPort    = port
+            , httpProxyTargetRawPath = rawPath
+            }
     | otherwise                        = Nothing
   where
     rawPath       = rawPathInfo req
@@ -316,8 +315,8 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
             let (wsHost, wsPort) = parseHostPortWithDefault 80 ws
                 wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
             if wpsUpgradeToRaw defaultWaiProxySettings req
-                then Just (ProxyDest wsHost wsPort, wsWrapper)
-                else Nothing
+              then Just (ProxyDest wsHost wsPort, wsWrapper)
+              else Nothing
 
         proxiedRequest target@HttpProxyTarget{..} =
             let authority = renderHttpProxyAuthority target
@@ -333,25 +332,25 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
 
 httpConnectProxy :: ProxySettings -> Middleware
 httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
-  authorized <- checkAuth pset req
-  if authorized
-    then do
-      forM_ mPaddingType $ \paddingType ->
-        logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
-                       " for " <> logRequest req
-      connected <- tryAndCatchAll $ CN.runTCPClient settings respondResponse
-      case connected of
-        Right received -> return received
-        Left ex        -> do
-          logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
-          respond connectFailureResponse
-    else if hideProxyAuth
-           then do
-             logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
-             fallback req respond
-           else do
-             logger WARN $ "unauthorized request: " <> logRequest req
-             respond (proxyAuthRequiredResponse pset)
+    authorized <- checkAuth pset req
+    if authorized
+      then do
+          forM_ mPaddingType $ \paddingType ->
+            logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
+                           " for " <> logRequest req
+          connected <- tryAndCatchAll $ CN.runTCPClient settings respondResponse
+          case connected of
+              Right received -> return received
+              Left ex        -> do
+                  logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
+                  respond connectFailureResponse
+      else if hideProxyAuth
+             then do
+                 logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+                 fallback req respond
+             else do
+                 logger WARN $ "unauthorized request: " <> logRequest req
+                 respond (proxyAuthRequiredResponse pset)
   where
     settings = CN.clientSettings port host
 

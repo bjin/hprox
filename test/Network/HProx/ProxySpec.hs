@@ -103,6 +103,7 @@ spec = do
       response <- runProxyApp (httpProxy authRequiredSettings) defaultRequest
       simpleStatus response `shouldBe` fallbackStatus
       simpleBody response `shouldBe` fallbackBody
+
   describe "HTTP proxy target parsing" $ do
     it "selects raw absolute-URI proxy targets with default ports" $
       selectHttpProxyTarget rawProxyRequest

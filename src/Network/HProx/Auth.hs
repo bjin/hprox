@@ -15,7 +15,7 @@ import Network.HProx.Log
 import Network.HProx.Util
 
 loadProxyAuth :: Logger -> Maybe FilePath -> IO (Maybe (BS8.ByteString -> Bool))
-loadProxyAuth _ Nothing = return Nothing
+loadProxyAuth _ Nothing       = return Nothing
 loadProxyAuth logger (Just f) = do
     logger INFO $ "read username and passwords from " <> toLogStr f
     userList <- zip [1 :: Int ..] . map stripTrailingCarriageReturn . BS8.lines <$> BS8.readFile f

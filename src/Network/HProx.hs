@@ -38,51 +38,52 @@ run fallback conf@Config{..} =
     either (ioError . userError) runValidated (validateRuntimeConfig conf)
   where
     runValidated () =
-      let runtimeConfig = buildRuntimeConfig conf
-      in withLogger (logOutputType (runtimeConfigLogOutput runtimeConfig)) _loglevel $ \logger -> do
-        logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
+        let runtimeConfig = buildRuntimeConfig conf
+        in withLogger (logOutputType (runtimeConfigLogOutput runtimeConfig)) _loglevel $ \logger -> do
+            logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
-        allCerts <- loadTlsCredentials _ssl
-        smgr <- SM.newSessionManager SM.defaultConfig
+            allCerts <- loadTlsCredentials _ssl
+            smgr <- SM.newSessionManager SM.defaultConfig
 
-        let isSSL = not (null _ssl)
+            let isSSL = not (null _ssl)
 
-        when isSSL $ do
-            logger INFO $ "read " <> toLogStr (show $ length allCerts) <> " certificates"
-            logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
+            when isSSL $ do
+                logger INFO $ "read " <> toLogStr (show $ length allCerts) <> " certificates"
+                logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
 
-        let beforeMainLoop =
+            let beforeMainLoop =
 #ifdef OS_UNIX
-              Just doBeforeMainLoop
+                    Just doBeforeMainLoop
 #else
-              Nothing
+                    Nothing
 #endif
-            settings = buildWarpSettings conf logger beforeMainLoop
+                settings = buildWarpSettings conf logger beforeMainLoop
 
 #ifdef OS_UNIX
-            doBeforeMainLoop = do
-                dropped <- dropRootPriviledge logger _user _group
+                doBeforeMainLoop = do
+                    dropped <- dropRootPriviledge logger _user _group
 #ifdef QUIC_ENABLED
-                case (dropped, _quic) of
-                    (True, Just qport) | qport < 1024 -> logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
-                    (True, _) -> logger INFO "root priviledge dropped"
-                    _         -> return ()
+                    case (dropped, _quic) of
+                        (True, Just qport) | qport < 1024 ->
+                            logger ERROR $ "dropping root priviledge will likely break QUIC connection over UDP port " <> toLogStr (show qport)
+                        (True, _) -> logger INFO "root priviledge dropped"
+                        _         -> return ()
 #else
-                when dropped $ logger INFO "root priviledge dropped"
+                    when dropped $ logger INFO "root priviledge dropped"
 #endif
 #endif
 
-        pauth <- loadProxyAuth logger _auth
+            pauth <- loadProxyAuth logger _auth
 
-        manager <- newTlsManager
+            manager <- newTlsManager
 
-        let proxyRuntime = buildProxyRuntime runtimeConfig conf logger pauth isSSL
-            pset = runtimeProxySettings proxyRuntime
-            revSorted = runtimeReverseRoutes proxyRuntime
-            proxy = buildProxyApplication isSSL pset manager fallback
+            let proxyRuntime = buildProxyRuntime runtimeConfig conf logger pauth isSSL
+                pset = runtimeProxySettings proxyRuntime
+                revSorted = runtimeReverseRoutes proxyRuntime
+                proxy = buildProxyApplication isSSL pset manager fallback
 
-        forM_ _ws $ \ws -> logger INFO $ "websocket redirect: " <> toLogStr ws
-        unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
-        forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
+            forM_ _ws $ \ws -> logger INFO $ "websocket redirect: " <> toLogStr ws
+            unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
+            forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
 
-        runProxyServer conf logger settings smgr allCerts proxy
+            runProxyServer conf logger settings smgr allCerts proxy

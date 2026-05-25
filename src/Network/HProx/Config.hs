@@ -22,66 +22,66 @@ import Paths_hprox
 
 -- | Configuration of HProx, see @hprox --help@ for details
 data Config = Config
-  { _bind     :: !(Maybe String)
-  , _port     :: !Int
-  , _ssl      :: ![(String, CertFile)]
-  , _auth     :: !(Maybe FilePath)
-  , _ws       :: !(Maybe BS8.ByteString)
-  , _rev      :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
-  , _doh      :: !(Maybe String)
-  , _hide     :: !Bool
-  , _naive    :: !Bool
-  , _name     :: !BS8.ByteString
-  , _acme     :: !(Maybe BS8.ByteString)
-  , _log      :: !String
-  , _loglevel :: !LogLevel
+    { _bind     :: !(Maybe String)
+    , _port     :: !Int
+    , _ssl      :: ![(String, CertFile)]
+    , _auth     :: !(Maybe FilePath)
+    , _ws       :: !(Maybe BS8.ByteString)
+    , _rev      :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
+    , _doh      :: !(Maybe String)
+    , _hide     :: !Bool
+    , _naive    :: !Bool
+    , _name     :: !BS8.ByteString
+    , _acme     :: !(Maybe BS8.ByteString)
+    , _log      :: !String
+    , _loglevel :: !LogLevel
 #ifdef OS_UNIX
-  , _user     :: !(Maybe String)
-  , _group    :: !(Maybe String)
+    , _user     :: !(Maybe String)
+    , _group    :: !(Maybe String)
 #endif
 #ifdef QUIC_ENABLED
-  , _quic     :: !(Maybe Int)
+    , _quic     :: !(Maybe Int)
 #endif
-  }
+    }
 
 -- | Default value of 'Config', same as running @hprox@ without arguments
 defaultConfig :: Config
 defaultConfig = Config
-  { _bind     = Nothing
-  , _port     = 3000
-  , _ssl      = []
-  , _auth     = Nothing
-  , _ws       = Nothing
-  , _rev      = []
-  , _doh      = Nothing
-  , _hide     = False
-  , _naive    = False
-  , _name     = "hprox"
-  , _acme     = Nothing
-  , _log      = "stdout"
-  , _loglevel = INFO
+    { _bind     = Nothing
+    , _port     = 3000
+    , _ssl      = []
+    , _auth     = Nothing
+    , _ws       = Nothing
+    , _rev      = []
+    , _doh      = Nothing
+    , _hide     = False
+    , _naive    = False
+    , _name     = "hprox"
+    , _acme     = Nothing
+    , _log      = "stdout"
+    , _loglevel = INFO
 #ifdef OS_UNIX
-  , _user     = Nothing
-  , _group    = Nothing
+    , _user     = Nothing
+    , _group    = Nothing
 #endif
 #ifdef QUIC_ENABLED
-  , _quic     = Nothing
+    , _quic     = Nothing
 #endif
-  }
+    }
 
 -- | Certificate file pairs
 data CertFile = CertFile
-  { certfile :: !FilePath
-  , keyfile  :: !FilePath
-  }
+    { certfile :: !FilePath
+    , keyfile  :: !FilePath
+    }
 
 parser :: ParserInfo Config
 parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
   where
     parseBoundedPort optionName raw =
-      case reads raw of
-        [(parsedPort, "")] | validPort parsedPort -> Right parsedPort
-        _                                         -> Left $ optionName <> " must be in range 1..65535"
+        case reads raw of
+            [(parsedPort, "")] | validPort parsedPort -> Right parsedPort
+            _                                         -> Left $ optionName <> " must be in range 1..65535"
 
     validPort parsedPort = parsedPort >= (1 :: Int) && parsedPort <= 65535
 
@@ -90,13 +90,13 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
         _otherwise          -> Left "invalid format for ssl certificates"
 
     parseRev0 s@('/':_) = do
-      (domain, prefix, remote) <- case elemIndices '/' s of
-        []      -> Nothing
-        indices -> let (prefix, remote) = splitAt (last indices + 1) s
-                   in Just (Nothing, BS8.pack prefix, BS8.pack remote)
-      if BS8.null remote
-        then Nothing
-        else Just (domain, prefix, remote)
+        (domain, prefix, remote) <- case elemIndices '/' s of
+            []      -> Nothing
+            indices -> let (prefix, remote) = splitAt (last indices + 1) s
+                       in Just (Nothing, BS8.pack prefix, BS8.pack remote)
+        if BS8.null remote
+          then Nothing
+          else Just (domain, prefix, remote)
     parseRev0 remote
       | null remote = Nothing
       | otherwise   = Just (Nothing, "/", BS8.pack remote)
