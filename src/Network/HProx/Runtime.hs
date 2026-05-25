@@ -6,13 +6,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.HProx.Runtime
-  ( ProxyRuntime(..)
-  , RunnerPlan(..)
+  ( RunnerPlan(..)
   , RuntimeConfig(..)
-  , StartupStep(..)
   , WarpRuntimePlan(..)
   , buildProxyApplication
-  , buildProxyRuntime
+  , buildProxySettings
   , buildRuntimeConfig
   , buildTlsSettings
   , buildWarpRuntimePlan
@@ -24,11 +22,8 @@ module Network.HProx.Runtime
   , runProxyServer
   , runtimeExceptionToLog
   , selectRunnerPlan
-  , shouldIgnoreRuntimeException
   , shouldSuppressAccessLog
-  , shouldWrapDNSOverHTTPS
   , sniPatternMatches
-  , startupOrder
   , validateRuntimeConfig
   ) where
 
@@ -37,7 +32,7 @@ import Control.Exception
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
 import Data.List                   (sortOn)
-import Data.Maybe                  (fromMaybe, isJust, isNothing)
+import Data.Maybe                  (fromMaybe, isJust)
 import Data.Ord                    (Down(..))
 import Data.String                 (fromString)
 import GHC.IO.Exception            (IOErrorType(..))
@@ -73,11 +68,6 @@ data RuntimeConfig = RuntimeConfig
     }
   deriving (Eq, Show)
 
-data ProxyRuntime = ProxyRuntime
-    { runtimeProxySettings :: !ProxySettings
-    , runtimeReverseRoutes :: ![(Maybe BS8.ByteString, BS8.ByteString, BS8.ByteString)]
-    }
-
 data WarpRuntimePlan = WarpRuntimePlan
     { runtimeBindHost    :: !String
     , runtimePort        :: !Int
@@ -92,19 +82,6 @@ data RunnerPlan
     | QuicAndTlsRunner !Int
   deriving (Eq, Show)
 
-data StartupStep
-    = InitializeLogger
-    | LogStartup
-    | ReadCertificates
-    | CreateTlsSessionManager
-    | BuildSettingsAndRunner
-    | LoadProxyAuth
-    | CreateHttpManager
-    | BuildProxyApplication
-    | LogRuntimeConfig
-    | StartRunner
-  deriving (Eq, Show)
-
 buildRuntimeConfig :: Config -> RuntimeConfig
 buildRuntimeConfig Config{..} = RuntimeConfig
     { runtimeConfigLogOutput          = parseLogOutput _log
@@ -114,19 +91,16 @@ buildRuntimeConfig Config{..} = RuntimeConfig
   where
     revSorted = sortOn (\(a,b,_) -> Down (isJust a, BS8.length b)) _rev
 
-buildProxyRuntime :: RuntimeConfig -> Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxyRuntime
-buildProxyRuntime RuntimeConfig{..} Config{..} logger pauth isSSL = ProxyRuntime
-    { runtimeProxySettings = ProxySettings
-          { proxyAuth      = pauth
-          , passPrompt     = Just _name
-          , wsRemote       = _ws
-          , revRemoteMap   = runtimeConfigReverseRoutes
-          , hideProxyAuth  = _hide
-          , naivePadding   = _naive && isSSL
-          , acmeThumbprint = _acme
-          , logger         = logger
-          }
-    , runtimeReverseRoutes = runtimeConfigReverseRouteTuples
+buildProxySettings :: RuntimeConfig -> Config -> Logger -> Maybe (BS8.ByteString -> Bool) -> Bool -> ProxySettings
+buildProxySettings RuntimeConfig{..} Config{..} logger pauth isSSL = ProxySettings
+    { proxyAuth      = pauth
+    , passPrompt     = Just _name
+    , wsRemote       = _ws
+    , revRemoteMap   = runtimeConfigReverseRoutes
+    , hideProxyAuth  = _hide
+    , naivePadding   = _naive && isSSL
+    , acmeThumbprint = _acme
+    , logger         = logger
     }
 
 buildProxyApplication :: Bool -> ProxySettings -> HC.Manager -> Application -> Application
@@ -148,9 +122,6 @@ selectRunnerPlan _ certs = case certs of
     _  -> TlsWarpRunner
 #endif
 
-shouldWrapDNSOverHTTPS :: Config -> Bool
-shouldWrapDNSOverHTTPS Config{..} = isJust _doh
-
 validateRuntimeConfig :: Config -> Either String ()
 validateRuntimeConfig Config{..} = do
     validatePortField "--port" _port
@@ -162,20 +133,6 @@ validatePortField :: String -> Int -> Either String ()
 validatePortField field port
     | port >= 1 && port <= 65535 = Right ()
     | otherwise                  = Left $ "invalid " <> field <> ": " <> show port <> " (expected 1..65535)"
-
-startupOrder :: [StartupStep]
-startupOrder =
-    [ InitializeLogger
-    , LogStartup
-    , ReadCertificates
-    , CreateTlsSessionManager
-    , BuildSettingsAndRunner
-    , LoadProxyAuth
-    , CreateHttpManager
-    , BuildProxyApplication
-    , LogRuntimeConfig
-    , StartRunner
-    ]
 
 runProxyServer
     :: Config
@@ -252,9 +209,6 @@ warpAccessLogger logger req status _
 
 shouldSuppressAccessLog :: Request -> Bool
 shouldSuppressAccessLog req = rawPathInfo req == "/.hprox/health"
-
-shouldIgnoreRuntimeException :: LogLevel -> SomeException -> Bool
-shouldIgnoreRuntimeException logLevel ex = isNothing (runtimeExceptionToLog logLevel ex)
 
 runtimeExceptionToLog :: LogLevel -> SomeException -> Maybe SomeException
 runtimeExceptionToLog logLevel ex

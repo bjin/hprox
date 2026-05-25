@@ -77,9 +77,8 @@ run fallback conf@Config{..} =
 
             manager <- newTlsManager
 
-            let proxyRuntime = buildProxyRuntime runtimeConfig conf logger pauth isSSL
-                pset = runtimeProxySettings proxyRuntime
-                revSorted = runtimeReverseRoutes proxyRuntime
+            let pset = buildProxySettings runtimeConfig conf logger pauth isSSL
+                revSorted = runtimeConfigReverseRouteTuples runtimeConfig
                 proxy = buildProxyApplication isSSL pset manager fallback
 
             forM_ _ws $ \ws -> logger INFO $ "websocket redirect: " <> toLogStr ws

@@ -9,6 +9,7 @@ module Network.HProx.RuntimeSpec
   ) where
 
 import Control.Exception           (SomeException, displayException, toException)
+import Data.Maybe                  (isJust, isNothing)
 import GHC.IO.Exception            (IOErrorType(..))
 import Network.HTTP2.Client        qualified as H2
 import Network.Wai
@@ -148,25 +149,6 @@ spec = do
           }
 #endif
 
-  describe "DoH wrapping decision" $ do
-    it "wraps the application only when a DoH resolver is configured" $ do
-      shouldWrapDNSOverHTTPS defaultConfig `shouldBe` False
-      shouldWrapDNSOverHTTPS defaultConfig { _doh = Just "127.0.0.1:53" } `shouldBe` True
-
-  describe "startup side-effect order" $
-    it "documents the current run startup order" $
-      startupOrder `shouldBe`
-        [ InitializeLogger
-        , LogStartup
-        , ReadCertificates
-        , CreateTlsSessionManager
-        , BuildSettingsAndRunner
-        , LoadProxyAuth
-        , CreateHttpManager
-        , BuildProxyApplication
-        , LogRuntimeConfig
-        , StartRunner
-        ]
   describe "access log filtering" $ do
     it "suppresses health-check access logs" $
       shouldSuppressAccessLog defaultRequest { rawPathInfo = "/.hprox/health" } `shouldBe` True
@@ -176,31 +158,31 @@ spec = do
 
   describe "runtime exception filtering" $ do
     it "suppresses all exception logs above DEBUG level" $
-      shouldIgnoreRuntimeException INFO displayedException `shouldBe` True
+      runtimeExceptionToLog INFO displayedException `shouldSatisfy` isNothing
 
     it "keeps ordinary displayable exceptions at DEBUG level" $
-      shouldIgnoreRuntimeException DEBUG displayedException `shouldBe` False
+      runtimeExceptionToLog DEBUG displayedException `shouldSatisfy` isJust
 
     it "unwraps HTTP/2 wrappers before selecting the exception to log" $
       fmap displayException (runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen displayedException)))
         `shouldBe` Just (displayException displayedException)
 
     it "suppresses EOF IO exceptions" $
-      shouldIgnoreRuntimeException DEBUG eofException `shouldBe` True
+      runtimeExceptionToLog DEBUG eofException `shouldSatisfy` isNothing
 
     it "suppresses HTTP/2 errors and recursively classified HTTP/2 wrappers" $ do
-      shouldIgnoreRuntimeException DEBUG (toException H2.ConnectionIsClosed) `shouldBe` True
-      shouldIgnoreRuntimeException DEBUG (toException (H2.BadThingHappen eofException)) `shouldBe` True
+      runtimeExceptionToLog DEBUG (toException H2.ConnectionIsClosed) `shouldSatisfy` isNothing
+      runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen eofException)) `shouldSatisfy` isNothing
 
 #ifdef QUIC_ENABLED
     it "suppresses QUIC errors and recursively classified QUIC wrappers" $ do
-      shouldIgnoreRuntimeException DEBUG (toException Q.ConnectionIsReset) `shouldBe` True
-      shouldIgnoreRuntimeException DEBUG (toException (Q.BadThingHappen eofException)) `shouldBe` True
+      runtimeExceptionToLog DEBUG (toException Q.ConnectionIsReset) `shouldSatisfy` isNothing
+      runtimeExceptionToLog DEBUG (toException (Q.BadThingHappen eofException)) `shouldSatisfy` isNothing
 #endif
 
     it "suppresses Warp TLS and peer-close exceptions" $ do
-      shouldIgnoreRuntimeException DEBUG (toException InsecureConnectionDenied) `shouldBe` True
-      shouldIgnoreRuntimeException DEBUG (toException ConnectionClosedByPeer) `shouldBe` True
+      runtimeExceptionToLog DEBUG (toException InsecureConnectionDenied) `shouldSatisfy` isNothing
+      runtimeExceptionToLog DEBUG (toException ConnectionClosedByPeer) `shouldSatisfy` isNothing
 
 displayedException :: SomeException
 displayedException = toException $ userError "display me"
