@@ -7,7 +7,7 @@ module Network.HProx.ProxySpec
   ) where
 
 import Control.Concurrent.Async   (withAsync)
-import Control.Exception          (bracket)
+import Control.Exception          (SomeException, bracket, try)
 import Control.Monad              (unless)
 import Data.ByteString.Base64     qualified as B64
 import Data.ByteString.Char8      qualified as BS8
@@ -97,6 +97,21 @@ spec = do
       port <- getFreePort
       response <- runConnectApp authorizedSettings (connectRequestFor "127.0.0.1" port HT.http20)
       simpleStatus response `shouldBe` HT.status502
+
+    it "does not log upstream failure after an HTTP/2 tunnel response starts" $
+      withTcpEchoServer $ \targetPort -> do
+        logs <- newIORef []
+        let loggingSettings = authorizedSettings
+              { logger = \_ msg -> modifyIORef' logs (LBS.fromStrict (FL.fromLogStr msg) :)
+              }
+            tunnelRequest = connectRequestFor "127.0.0.1" targetPort HT.http20
+            failAfterResponse _ = ioError (userError "client stream closed after connect")
+        result <- try (httpConnectProxy loggingSettings fallback tunnelRequest failAfterResponse) :: IO (Either SomeException ResponseReceived)
+        case result of
+          Left _  -> return ()
+          Right _ -> expectationFailure "response failure was swallowed"
+        renderedLogs <- LBS.toStrict . LBS.concat . reverse <$> readIORef logs
+        renderedLogs `shouldNotSatisfy` BS8.isInfixOf "CONNECT upstream failure"
 
   describe "HTTP proxy fallback decisions" $
     it "falls through for non-proxy GET requests" $ do

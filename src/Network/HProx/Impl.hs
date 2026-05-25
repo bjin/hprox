@@ -21,7 +21,7 @@ module Network.HProx.Impl
 
 import Control.Applicative        ((<|>))
 import Control.Concurrent.Async   (cancel, wait, waitEither, withAsync)
-import Control.Exception          (SomeException, try)
+import Control.Exception          (SomeException, throwIO, try)
 import Control.Monad              (forM_, unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
 import Data.Binary.Builder        qualified as BB
@@ -32,6 +32,7 @@ import Data.ByteString.Lazy       qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive       qualified as CI
 import Data.Conduit.Network       qualified as CN
+import Data.IORef                 (newIORef, readIORef, writeIORef)
 import Data.Text.Encoding         qualified as TE
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
@@ -338,12 +339,17 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
           forM_ mPaddingType $ \paddingType ->
             logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
                            " for " <> logRequest req
-          connected <- tryAndCatchAll $ CN.runTCPClient settings respondResponse
+          responseStarted <- newIORef False
+          connected <- tryAndCatchAll $ CN.runTCPClient settings (respondResponse responseStarted)
           case connected of
               Right received -> return received
               Left ex        -> do
-                  logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
-                  respond connectFailureResponse
+                  started <- readIORef responseStarted
+                  if started
+                    then throwIO ex
+                    else do
+                        logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
+                        respond connectFailureResponse
       else if hideProxyAuth
              then do
                  logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
@@ -376,10 +382,13 @@ httpConnectProxy pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just 
 
     mPaddingType = if naivePadding then parseRequestForPadding req else Nothing
 
-    respondResponse server
-        | HT.httpMajor (httpVersion req) < 2 = respond $ responseRaw (handleConnect server True) backup
+    respondResponse responseStarted server
+        | HT.httpMajor (httpVersion req) < 2 = do
+            writeIORef responseStarted True
+            respond $ responseRaw (handleConnect server True) backup
         | otherwise                          = do
             paddingHeaders <- liftIO $ prepareResponseForPadding mPaddingType
+            writeIORef responseStarted True
             respond $ responseStream HT.status200 paddingHeaders streaming
       where
         streaming write flush = do
