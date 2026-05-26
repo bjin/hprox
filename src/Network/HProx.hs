@@ -17,11 +17,10 @@ module Network.HProx
   , run
   ) where
 
-import Control.Monad              (forM_, unless, when)
-import Data.Version               (showVersion)
-import Network.HTTP.Client.TLS    (newTlsManager)
-import Network.TLS.SessionManager qualified as SM
-import Network.Wai                (Application)
+import Control.Monad           (forM_, unless, when)
+import Data.Version            (showVersion)
+import Network.HTTP.Client.TLS (newTlsManager)
+import Network.Wai             (Application)
 
 import Network.HProx.Auth
 import Network.HProx.Config
@@ -42,14 +41,14 @@ run fallback conf@Config{..} =
         in withLogger (logOutputType (runtimeConfigLogOutput runtimeConfig)) _loglevel $ \logger -> do
             logger INFO $ "hprox " <> toLogStr (showVersion version) <> " started"
 
-            allCerts <- loadTlsCredentials _ssl
-            smgr <- SM.newSessionManager SM.defaultConfig
+            credentialStore <- loadTlsCredentialStore _ssl
 
             let isSSL = not (null _ssl)
 
             when isSSL $ do
-                logger INFO $ "read " <> toLogStr (show $ length allCerts) <> " certificates"
-                logger INFO $ "domains: " <> toLogStr (unwords $ map fst allCerts)
+                logger INFO $ "read " <> toLogStr (show $ length _ssl) <> " certificates"
+                logger INFO $ "domains: " <> toLogStr (unwords $ map fst _ssl)
+                installSighupHandler $ reloadTlsCredentialStore logger credentialStore
 
             let beforeMainLoop =
 #ifdef OS_UNIX
@@ -85,4 +84,4 @@ run fallback conf@Config{..} =
             unless (null revSorted) $ logger INFO $ "reverse proxy: " <> toLogStr (show revSorted)
             forM_ _doh $ \doh -> logger INFO $ "DNS-over-HTTPS redirect: " <> toLogStr doh
 
-            runProxyServer conf logger settings smgr allCerts proxy
+            runProxyServer conf logger settings credentialStore proxy

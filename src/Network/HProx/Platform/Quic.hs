@@ -7,6 +7,10 @@
 module Network.HProx.Platform.Quic
   ( quicAddressPlan
   , quicAltSvc
+#ifdef QUIC_ENABLED
+  , buildQuicServerConfig
+  , quicSessionManagerConfig
+#endif
   , quicUse0RTT
   , runQuicAndTls
   ) where
@@ -26,6 +30,7 @@ import Data.List                    (find)
 import Data.Maybe                   (fromMaybe)
 import Data.String                  (fromString)
 import Network.QUIC.Internal        qualified as Q
+import Network.TLS.SessionManager   qualified as SM
 import Network.Wai.Handler.Warp     (setAltSvc)
 import Network.Wai.Handler.WarpQUIC (runQUIC)
 #endif
@@ -50,16 +55,15 @@ runQuicAndTls
     -> Settings
     -> TLSSettings
     -> (Maybe String -> IO TLS.Credentials)
-    -> TLS.SessionManager
-    -> TLS.Credential
     -> Int
     -> Application
     -> IO ()
 #ifdef QUIC_ENABLED
-runQuicAndTls logger bind settings tlsSettings onSNI sessionManager defaultCert qport app = do
+runQuicAndTls logger bind settings tlsSettings onSNI qport app = do
     logger INFO $ "bind to UDP port " <> toLogStr (fromMaybe "all interfaces" bind) <> ":" <> toLogStr qport
+    sessionManager <- SM.newSessionManager quicSessionManagerConfig
     mapConcurrently_ ($ app)
-        [ runQUIC (buildQuicServerConfig bind onSNI sessionManager defaultCert qport) settings
+        [ runQUIC (buildQuicServerConfig bind onSNI sessionManager qport) settings
         , runTLS tlsSettings (setAltSvc (quicAltSvc qport) settings)
         ]
 
@@ -70,18 +74,20 @@ buildQuicServerConfig
     :: Maybe String
     -> (Maybe String -> IO TLS.Credentials)
     -> TLS.SessionManager
-    -> TLS.Credential
     -> Int
     -> Q.ServerConfig
-buildQuicServerConfig bind onSNI sessionManager cert port = Q.defaultServerConfig
+buildQuicServerConfig bind onSNI sessionManager port = Q.defaultServerConfig
     { Q.scAddresses      = [(fromString host, fromIntegral bindPort) | (host, bindPort) <- quicAddressPlan bind port]
     , Q.scVersions       = [Q.Version1, Q.Version2]
-    , Q.scCredentials    = TLS.Credentials [cert]
+    , Q.scCredentials    = TLS.Credentials []
     , Q.scALPN           = Just alpn
     , Q.scTlsHooks       = def { TLS.onServerNameIndication = onSNI }
     , Q.scUse0RTT        = quicUse0RTT
     , Q.scSessionManager = sessionManager
     }
+
+quicSessionManagerConfig :: SM.Config
+quicSessionManagerConfig = SM.defaultConfig { SM.dbMaxSize = 0 }
 #else
-runQuicAndTls _ _ settings tlsSettings _ _ _ _ app = runTLS tlsSettings settings app
+runQuicAndTls _ _ settings tlsSettings _ _ app = runTLS tlsSettings settings app
 #endif

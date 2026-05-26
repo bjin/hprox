@@ -10,6 +10,7 @@ module Network.HProx.Platform.Unix
   , ResolvedGroup(..)
   , ResolvedUser(..)
   , dropRootPriviledge
+  , installSighupHandler
   , planPrivilegeDrop
   ) where
 
@@ -23,6 +24,7 @@ import Network.HProx.Log
 import Control.Exception    (SomeException, catch)
 import System.Exit
 import System.Posix.Process (exitImmediately)
+import System.Posix.Signals (Handler(Catch), installHandler, sigHUP)
 import System.Posix.User
 #endif
 
@@ -67,6 +69,11 @@ planPrivilegeDrop userEntry groupEntry allGroups = PrivilegeDropPlan
         _otherwise                       -> []
 
 #ifdef OS_UNIX
+installSighupHandler :: IO () -> IO ()
+installSighupHandler action = do
+    _ <- installHandler sigHUP (Catch action) Nothing
+    return ()
+
 dropRootPriviledge :: Logger -> Maybe String -> Maybe String -> IO Bool
 dropRootPriviledge _ Nothing Nothing = return False
 dropRootPriviledge logger user groupName' = do
@@ -131,4 +138,7 @@ verifySupplementaryGroups abort expectedGroups = do
 #else
 dropRootPriviledge :: Logger -> Maybe String -> Maybe String -> IO Bool
 dropRootPriviledge _ _ _ = return False
+
+installSighupHandler :: IO () -> IO ()
+installSighupHandler _ = return ()
 #endif

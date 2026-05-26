@@ -1,5 +1,15 @@
 ## Unreleased
 
+### Added
+- Added SIGHUP-triggered TLS credential reloading with fingerprint-based change detection
+- Added runtime-driven SNI certificate lookup backed by a mutable TLS credential store
+
+### Changed
+- Refactored Warp and QUIC to consume dynamic credentials from the runtime store instead of static defaults
+
+### Fixed
+- Stopped QUIC from keeping stale embedded credentials by using callback-based SNI resolution at handshake time
+
 ## 0.7.0
 
 ### Added

@@ -6,8 +6,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.HProx.Runtime
-  ( RunnerPlan(..)
+  ( LoadedCredential(..)
+  , RunnerPlan(..)
   , RuntimeConfig(..)
+  , TlsCredentialLoader
+  , TlsCredentialStore
   , WarpRuntimePlan(..)
   , buildProxyApplication
   , buildProxySettings
@@ -15,10 +18,16 @@ module Network.HProx.Runtime
   , buildTlsSettings
   , buildWarpRuntimePlan
   , buildWarpSettings
-  , defaultCertificate
+  , loadTlsCredentialFromMemory
+  , loadTlsCredentialStore
   , loadTlsCredentials
   , lookupSNICredentials
+  , lookupSNICredentialsFromStore
   , lookupSNIHost
+  , lookupTlsCredentialStore
+  , newTlsCredentialStore
+  , readTlsCredentialStore
+  , reloadTlsCredentialStore
   , runProxyServer
   , runtimeExceptionToLog
   , selectRunnerPlan
@@ -27,10 +36,15 @@ module Network.HProx.Runtime
   , validateRuntimeConfig
   ) where
 
+import Control.Concurrent.MVar     (MVar, newMVar, withMVar)
 import Control.Exception
     (IOException, SomeException, displayException, fromException, try)
+import Control.Monad               (zipWithM)
+import Crypto.Hash                 qualified as Hash
+import Data.ByteString             qualified as BS
 import Data.ByteString.Char8       qualified as BS8
 import Data.Default.Class          (def)
+import Data.IORef                  (IORef, atomicWriteIORef, newIORef, readIORef)
 import Data.List                   (sortOn)
 import Data.Maybe                  (fromMaybe, isJust)
 import Data.Ord                    (Down(..))
@@ -81,6 +95,23 @@ data RunnerPlan
     | TlsWarpRunner
     | QuicAndTlsRunner !Int
   deriving (Eq, Show)
+
+data LoadedCredential credential = LoadedCredential
+    { loadedCredentialValue                  :: !credential
+    , loadedCredentialCertificateFingerprint :: !(Hash.Digest Hash.SHA256)
+    , loadedCredentialKeyFingerprint         :: !(Hash.Digest Hash.SHA256)
+    }
+  deriving (Eq, Show)
+
+type TlsCredentialLoader credential =
+    CertFile -> IO (Either String (LoadedCredential credential))
+
+data TlsCredentialStore credential = TlsCredentialStore
+    { tlsCredentialStoreSources    :: ![(String, CertFile)]
+    , tlsCredentialStoreSnapshot   :: !(IORef [(String, LoadedCredential credential)])
+    , tlsCredentialStoreReloadLock :: !(MVar ())
+    , tlsCredentialStoreLoader     :: !(TlsCredentialLoader credential)
+    }
 
 buildRuntimeConfig :: Config -> RuntimeConfig
 buildRuntimeConfig Config{..} = RuntimeConfig
@@ -138,39 +169,34 @@ runProxyServer
     :: Config
     -> Logger
     -> Settings
-    -> TLS.SessionManager
-    -> [(String, TLS.Credential)]
+    -> TlsCredentialStore TLS.Credential
     -> Application
     -> IO ()
-runProxyServer conf@Config{..} logger settings sessionManager certs app = do
+runProxyServer conf@Config{..} logger settings credentialStore app = do
     logger INFO $ "bind to TCP port " <> toLogStr (fromMaybe "[::]" _bind) <> ":" <> toLogStr _port
     case _doh of
         Nothing  -> runner app
         Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver app))
     where
-      runner = case (selectRunnerPlan conf certs, defaultCertificate certs) of
-          (PlainWarpRunner, _) -> runSettings settings
-          (TlsWarpRunner, Just defaultCert) ->
-              runTLS (buildTlsSettings sessionManager certs defaultCert) settings
+      runner = case selectRunnerPlan conf (tlsCredentialStoreSources credentialStore) of
+          PlainWarpRunner -> runSettings settings
+          TlsWarpRunner ->
+              runTLS (buildTlsSettings lookupSNICredentials') settings
 #ifdef QUIC_ENABLED
-          (QuicAndTlsRunner qport, Just defaultCert) ->
+          QuicAndTlsRunner qport ->
               runQuicAndTls
                 logger
                 _bind
                 settings
-                (buildTlsSettings sessionManager certs defaultCert)
+                (buildTlsSettings lookupSNICredentials')
                 lookupSNICredentials'
-                sessionManager
-                defaultCert
                 qport
 #else
-          (QuicAndTlsRunner _, Just defaultCert) ->
-              runTLS (buildTlsSettings sessionManager certs defaultCert) settings
+          QuicAndTlsRunner _ ->
+              runTLS (buildTlsSettings lookupSNICredentials') settings
 #endif
-          (_, Nothing) -> runSettings settings
-#ifdef QUIC_ENABLED
-      lookupSNICredentials' host = lookupSNICredentials host certs
-#endif
+
+      lookupSNICredentials' host = lookupSNICredentialsFromStore host credentialStore
 
 buildWarpRuntimePlan :: Config -> WarpRuntimePlan
 buildWarpRuntimePlan Config{..} = WarpRuntimePlan
@@ -226,39 +252,141 @@ runtimeExceptionToLog logLevel ex
     | Just ConnectionClosedByPeer <- fromException ex  = Nothing
     | otherwise                                        = Just ex
 
+loadTlsCredentialStore :: [(String, CertFile)] -> IO (TlsCredentialStore TLS.Credential)
+loadTlsCredentialStore = newTlsCredentialStore loadTlsCredential
+
 loadTlsCredentials :: [(String, CertFile)] -> IO [(String, TLS.Credential)]
-loadTlsCredentials certFiles = mapM readTlsCredential certFiles
+loadTlsCredentials certFiles = readTlsCredentialStore =<< loadTlsCredentialStore certFiles
+
+newTlsCredentialStore
+    :: TlsCredentialLoader credential
+    -> [(String, CertFile)]
+    -> IO (TlsCredentialStore credential)
+newTlsCredentialStore loader certFiles = do
+    loadedCredentials <- mapM (loadInitialTlsCredential loader) certFiles
+    snapshot <- newIORef loadedCredentials
+    reloadLock <- newMVar ()
+    return TlsCredentialStore
+        { tlsCredentialStoreSources    = certFiles
+        , tlsCredentialStoreSnapshot   = snapshot
+        , tlsCredentialStoreReloadLock = reloadLock
+        , tlsCredentialStoreLoader     = loader
+        }
+
+readTlsCredentialStore :: TlsCredentialStore credential -> IO [(String, credential)]
+readTlsCredentialStore TlsCredentialStore{..} =
+    map (fmap loadedCredentialValue) <$> readIORef tlsCredentialStoreSnapshot
+
+reloadTlsCredentialStore :: Logger -> TlsCredentialStore credential -> IO ()
+reloadTlsCredentialStore logger store@TlsCredentialStore{..} =
+    withMVar tlsCredentialStoreReloadLock $ \() -> do
+        logger INFO "SIGHUP received; reloading TLS certificates"
+        oldSnapshot <- readIORef tlsCredentialStoreSnapshot
+        newSnapshot <- zipWithM (reloadTlsCredential logger store) tlsCredentialStoreSources oldSnapshot
+        atomicWriteIORef tlsCredentialStoreSnapshot newSnapshot
+        logger INFO "TLS certificate reload completed"
+
+loadInitialTlsCredential
+    :: TlsCredentialLoader credential
+    -> (String, CertFile)
+    -> IO (String, LoadedCredential credential)
+loadInitialTlsCredential loader (name, certFile) = do
+    loaded <- try (loader certFile)
+    case loaded of
+        Left (err :: IOException) -> failWithTlsCredentialContext name certFile $ displayException err
+        Right (Left err)          -> failWithTlsCredentialContext name certFile err
+        Right (Right credential)  -> return (name, credential)
+
+reloadTlsCredential
+    :: Logger
+    -> TlsCredentialStore credential
+    -> (String, CertFile)
+    -> (String, LoadedCredential credential)
+    -> IO (String, LoadedCredential credential)
+reloadTlsCredential logger TlsCredentialStore{..} (name, certFile) (_, oldCredential) = do
+    loaded <- try (tlsCredentialStoreLoader certFile)
+    case loaded of
+        Left (err :: IOException) -> reloadFailed $ displayException err
+        Right (Left err)          -> reloadFailed err
+        Right (Right credential)
+            | loadedCredentialBytesChanged oldCredential credential -> do
+                logger INFO $ "installed reloaded TLS credential for " <> toLogStr (show name) <>
+                    " (certificate: " <> toLogStr (certfile certFile) <>
+                    ", key: " <> toLogStr (keyfile certFile) <> ")"
+                return (name, credential)
+            | otherwise -> return (name, oldCredential)
   where
-    readTlsCredential (name, CertFile cert key) = do
-        loadedCredential <- try (TLS.credentialLoadX509 cert key)
-        case loadedCredential of
-            Left err -> failWithContext name cert key $ displayException (err :: IOException)
-            Right (Left err) -> failWithContext name cert key err
-            Right (Right credential) -> return (name, credential)
+    reloadFailed err = do
+        logTlsCredentialReloadFailure logger name certFile err
+        return (name, oldCredential)
 
-    failWithContext name cert key err =
-        ioError $ userError $
-            "failed to load TLS credential for " ++ show name ++
-            " (certificate: " ++ cert ++ ", key: " ++ key ++ "): " ++ err
+loadedCredentialBytesChanged :: LoadedCredential credential -> LoadedCredential credential -> Bool
+loadedCredentialBytesChanged oldCredential newCredential =
+    loadedCredentialCertificateFingerprint oldCredential /= loadedCredentialCertificateFingerprint newCredential ||
+    loadedCredentialKeyFingerprint oldCredential /= loadedCredentialKeyFingerprint newCredential
 
-buildTlsSettings :: TLS.SessionManager -> [(String, TLS.Credential)] -> TLS.Credential -> TLSSettings
-buildTlsSettings sessionManager certs defaultCert = defaultTlsSettings
-    { tlsServerHooks     = def { TLS.onServerNameIndication = lookupSNICredentials' }
-    , tlsCredentials     = Just (TLS.Credentials [defaultCert])
+loadTlsCredential :: TlsCredentialLoader TLS.Credential
+loadTlsCredential (CertFile cert key) = do
+    certBytes <- BS.readFile cert
+    keyBytes <- BS.readFile key
+    return $ loadTlsCredentialFromMemory certBytes keyBytes
+
+loadTlsCredentialFromMemory :: BS.ByteString -> BS.ByteString -> Either String (LoadedCredential TLS.Credential)
+loadTlsCredentialFromMemory certBytes keyBytes =
+    case TLS.credentialLoadX509FromMemory certBytes keyBytes of
+        Left err -> Left err
+        Right credential@(TLS.CertificateChain chain, _)
+            | null chain -> Left "loaded TLS credential has an empty certificate chain"
+            | otherwise  -> Right LoadedCredential
+                { loadedCredentialValue                  = credential
+                , loadedCredentialCertificateFingerprint = fingerprintBytes certBytes
+                , loadedCredentialKeyFingerprint         = fingerprintBytes keyBytes
+                }
+
+fingerprintBytes :: BS.ByteString -> Hash.Digest Hash.SHA256
+fingerprintBytes = Hash.hash
+
+failWithTlsCredentialContext :: String -> CertFile -> String -> IO a
+failWithTlsCredentialContext name (CertFile cert key) err =
+    ioError $ userError $
+        "failed to load TLS credential for " ++ show name ++
+        " (certificate: " ++ cert ++ ", key: " ++ key ++ "): " ++ err
+
+logTlsCredentialReloadFailure :: Logger -> String -> CertFile -> String -> IO ()
+logTlsCredentialReloadFailure logger name (CertFile cert key) err =
+    logger ERROR $
+        "failed to reload TLS credential for " <> toLogStr (show name) <>
+        " (certificate: " <> toLogStr cert <>
+        ", key: " <> toLogStr key <> "): " <> toLogStr err
+
+buildTlsSettings :: (Maybe String -> IO TLS.Credentials) -> TLSSettings
+buildTlsSettings onSNI = defaultTlsSettings
+    { tlsServerHooks     = def { TLS.onServerNameIndication = onSNI }
+    , tlsCredentials     = Just (TLS.Credentials [])
     , onInsecure         = AllowInsecure
     , tlsAllowedVersions = [TLS.TLS13, TLS.TLS12]
-    , tlsSessionManager  = Just sessionManager
+    , tlsSessionManager  = Nothing
     }
-  where
-    lookupSNICredentials' host = lookupSNICredentials host certs
 
 lookupSNICredentials :: Maybe String -> [(String, TLS.Credential)] -> IO TLS.Credentials
 lookupSNICredentials host certs =
     either fail (return . TLS.Credentials . (: [])) (lookupSNIHost host certs)
 
-defaultCertificate :: [(String, a)] -> Maybe a
-defaultCertificate []              = Nothing
-defaultCertificate ((_, cert) : _) = Just cert
+lookupSNICredentialsFromStore :: Maybe String -> TlsCredentialStore TLS.Credential -> IO TLS.Credentials
+lookupSNICredentialsFromStore host store =
+    TLS.Credentials . (: []) <$> lookupTlsCredentialStore host store
+
+lookupTlsCredentialStore :: Maybe String -> TlsCredentialStore credential -> IO credential
+lookupTlsCredentialStore host TlsCredentialStore{..} = do
+    snapshot <- readIORef tlsCredentialStoreSnapshot
+    case host of
+        Nothing ->
+            case snapshot of
+                []             -> fail "SNI: no TLS credentials configured"
+                (_, value) : _ -> return $ loadedCredentialValue value
+        Just _ ->
+            either fail (return . loadedCredentialValue) (lookupSNIHost host snapshot)
+
 
 lookupSNIHost :: Maybe String -> [(String, a)] -> Either String a
 lookupSNIHost Nothing _ = Left "SNI: unspecified"

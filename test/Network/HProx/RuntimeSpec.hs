@@ -12,6 +12,7 @@ import Control.Exception           (SomeException, displayException, toException
 import Data.Maybe                  (isJust, isNothing)
 import GHC.IO.Exception            (IOErrorType(..))
 import Network.HTTP2.Client        qualified as H2
+import Network.TLS                 qualified as TLS
 import Network.Wai
 import Network.Wai.Handler.Warp
 import Network.Wai.Handler.WarpTLS
@@ -20,6 +21,7 @@ import System.IO.Error             (mkIOError)
 #ifdef QUIC_ENABLED
 import Network.HProx.Platform.Quic
 import Network.QUIC.Internal       qualified as Q
+import Network.TLS.SessionManager  qualified as SM
 #endif
 #ifdef OS_UNIX
 import Network.HProx.Platform.Unix
@@ -85,6 +87,16 @@ spec = do
           , runtimeNoParsePath = True
           }
 
+    it "uses dynamic SNI credentials and disables reusable TLS sessions" $ do
+      let settings = buildTlsSettings $ \_ -> return $ TLS.Credentials []
+      case tlsCredentials settings of
+        Just (TLS.Credentials credentials) -> credentials `shouldBe` []
+        Nothing -> expectationFailure "expected explicit empty TLS credentials"
+      case tlsSessionManager settings of
+        Nothing -> return ()
+        Just _  -> expectationFailure "expected disabled TLS session manager"
+      TLS.Credentials credentials <- TLS.onServerNameIndication (tlsServerHooks settings) Nothing
+      credentials `shouldBe` []
   describe "runner selection" $ do
     it "selects the plain Warp runner when no certificates are configured" $
       selectRunnerPlan defaultConfig [] `shouldBe` PlainWarpRunner
@@ -105,6 +117,19 @@ spec = do
       quicAddressPlan Nothing 8443 `shouldBe` [("0.0.0.0", 8443), ("::", 8443)]
       quicAddressPlan (Just "127.0.0.1") 8443 `shouldBe` [("127.0.0.1", 8443)]
       quicAltSvc 8443 `shouldBe` "h3=\":8443\""
+
+    it "builds QUIC TLS config without stale credentials" $ do
+      sessionManager <- SM.newSessionManager quicSessionManagerConfig
+      let onSNI host =
+            if host == Just "example.com"
+              then return $ TLS.Credentials []
+              else fail $ "unexpected SNI host: " <> show host
+          config = buildQuicServerConfig Nothing onSNI sessionManager 8443
+      SM.dbMaxSize quicSessionManagerConfig `shouldBe` 0
+      case Q.scCredentials config of
+        TLS.Credentials credentials -> credentials `shouldBe` []
+      TLS.Credentials credentials <- TLS.onServerNameIndication (Q.scTlsHooks config) (Just "example.com")
+      credentials `shouldBe` []
 #endif
 #ifdef OS_UNIX
   describe "privilege drop planning" $ do
