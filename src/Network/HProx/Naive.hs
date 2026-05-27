@@ -163,6 +163,6 @@ removePaddingVariant1 n = do
                 paddingLen = fromIntegral b2
             bs <- CB.take (fromIntegral (len + paddingLen))
             if LBS.length bs /= len + paddingLen
-                then return ()
-                else yield (LBS.toStrict $ LBS.take len bs) >> removePaddingVariant1 (n - 1)
+            then return ()
+            else yield (LBS.toStrict $ LBS.take len bs) >> removePaddingVariant1 (n - 1)
         _otherwise   -> return ()

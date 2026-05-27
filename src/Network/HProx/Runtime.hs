@@ -137,10 +137,10 @@ buildProxySettings RuntimeConfig{..} Config{..} logger pauth isSSL = ProxySettin
 buildProxyApplication :: Bool -> ProxySettings -> HC.Manager -> Application -> Application
 buildProxyApplication isSSL pset manager fallback =
     healthCheckProvider $
-        acmeProvider pset $
-            (if isSSL then forceSSL pset else id) $
-                httpProxy pset manager $
-                    reverseProxy pset manager fallback
+    acmeProvider pset $
+    (if isSSL then forceSSL pset else id) $
+    httpProxy pset manager $
+    reverseProxy pset manager fallback
 
 selectRunnerPlan :: Config -> [(String, a)] -> RunnerPlan
 #ifdef QUIC_ENABLED
@@ -184,13 +184,7 @@ runProxyServer conf@Config{..} logger settings credentialStore app = do
               runTLS (buildTlsSettings lookupSNICredentials') settings
 #ifdef QUIC_ENABLED
           QuicAndTlsRunner qport ->
-              runQuicAndTls
-                logger
-                _bind
-                settings
-                (buildTlsSettings lookupSNICredentials')
-                lookupSNICredentials'
-                qport
+              runQuicAndTls logger _bind settings (buildTlsSettings lookupSNICredentials') lookupSNICredentials' qport
 #else
           QuicAndTlsRunner _ ->
               runTLS (buildTlsSettings lookupSNICredentials') settings
@@ -209,12 +203,12 @@ buildWarpRuntimePlan Config{..} = WarpRuntimePlan
 buildWarpSettings :: Config -> Logger -> Maybe (IO ()) -> Settings
 buildWarpSettings config logger beforeMainLoop =
     applyBeforeMainLoop $
-        setHost (fromString (runtimeBindHost plan)) $
-            setPort (runtimePort plan) $
-                setLogger (warpAccessLogger logger) $
-                    setOnException (runtimeExceptionHandler logger (_loglevel config)) $
-                        setNoParsePath (runtimeNoParsePath plan) $
-                            setServerName (runtimeServerName plan) defaultSettings
+    setHost (fromString (runtimeBindHost plan)) $
+    setPort (runtimePort plan) $
+    setLogger (warpAccessLogger logger) $
+    setOnException (runtimeExceptionHandler logger (_loglevel config)) $
+    setNoParsePath (runtimeNoParsePath plan) $
+    setServerName (runtimeServerName plan) defaultSettings
   where
     plan = buildWarpRuntimePlan config
     applyBeforeMainLoop = maybe id setBeforeMainLoop beforeMainLoop
@@ -225,7 +219,7 @@ runtimeExceptionHandler logger logLevel req ex =
         Nothing    -> return ()
         Just ex' ->
             logger DEBUG $ "exception: " <> toLogStr (displayException ex') <>
-              maybe "" (\req' -> " from: " <> logRequest req') req
+                maybe "" (\req' -> " from: " <> logRequest req') req
 
 warpAccessLogger :: Logger -> Request -> HT.Status -> Maybe Integer -> IO ()
 warpAccessLogger logger req status _

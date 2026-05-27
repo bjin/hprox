@@ -80,41 +80,41 @@ dropRootPriviledge logger user groupName' = do
     currentUser <- getRealUserID
     currentGroup <- getRealGroupID
     if currentUser /= 0 || currentGroup /= 0
-      then do
-          logger WARN $ "Unable to setuid/setgid without root priviledge" <>
-                        ", userID=" <> toLogStr (show currentUser) <>
-                        ", groupID=" <> toLogStr (show currentGroup)
-          return False
-      else do
-          let abort msg = logger ERROR msg >> exitImmediately (ExitFailure 1)
-          let resolveUser entry = ResolvedUser (userName entry) (fromIntegral $ userID entry) (fromIntegral $ userGroupID entry)
-              resolveGroup entry = ResolvedGroup (groupName entry) (fromIntegral $ groupID entry) (groupMembers entry)
-          resolvedUser <- fmap resolveUser <$> mapM getUserEntryForName user
-          resolvedGroup <- fmap resolveGroup <$> mapM getGroupEntryForName groupName'
-          allGroups <- maybe (return []) (const $ map resolveGroup <$> getAllGroupEntries) resolvedUser
-          let plan = planPrivilegeDrop resolvedUser resolvedGroup allGroups
-          case privilegeDropUserName plan of
-              Just userName' -> do
-                  logger INFO $ "set supplementary groups for " <> toLogStr userName'
-                  setGroups $ map fromIntegral $ privilegeDropSupplementaryGroups plan
-              Nothing ->
-                  forM_ (privilegeDropGroupID plan) $ \_ -> do
-                      logger INFO "clear supplementary groups"
-                      setGroups []
-          forM_ (privilegeDropGroupID plan) $ \gid -> do
-              logger INFO $ "setgid to " <> maybe (toLogStr $ show gid) toLogStr (privilegeDropGroupName plan)
-              setGroupID $ fromIntegral gid
-              verifyGroupID abort gid
-          forM_ (privilegeDropUserID plan) $ \uid -> do
-              logger INFO $ "setuid to " <> maybe (toLogStr $ show uid) toLogStr (privilegeDropUserName plan)
-              setUserID $ fromIntegral uid
-              verifyUserID abort uid
-          verifySupplementaryGroups abort $ privilegeDropSupplementaryGroups plan
-          logger DEBUG "testing setuid(0), verify that root priviledge can't be regranted"
-          catch (setUserID 0) $ \(_ :: SomeException) -> logger DEBUG "setuid(0) failed as expected"
-          changedUser <- getRealUserID
-          when (changedUser == 0) $ abort "unable to drop root priviledge, aborting"
-          return True
+    then do
+        logger WARN $ "Unable to setuid/setgid without root priviledge" <>
+                      ", userID=" <> toLogStr (show currentUser) <>
+                      ", groupID=" <> toLogStr (show currentGroup)
+        return False
+    else do
+        let abort msg = logger ERROR msg >> exitImmediately (ExitFailure 1)
+        let resolveUser entry = ResolvedUser (userName entry) (fromIntegral $ userID entry) (fromIntegral $ userGroupID entry)
+            resolveGroup entry = ResolvedGroup (groupName entry) (fromIntegral $ groupID entry) (groupMembers entry)
+        resolvedUser <- fmap resolveUser <$> mapM getUserEntryForName user
+        resolvedGroup <- fmap resolveGroup <$> mapM getGroupEntryForName groupName'
+        allGroups <- maybe (return []) (const $ map resolveGroup <$> getAllGroupEntries) resolvedUser
+        let plan = planPrivilegeDrop resolvedUser resolvedGroup allGroups
+        case privilegeDropUserName plan of
+            Just userName' -> do
+                logger INFO $ "set supplementary groups for " <> toLogStr userName'
+                setGroups $ map fromIntegral $ privilegeDropSupplementaryGroups plan
+            Nothing ->
+                forM_ (privilegeDropGroupID plan) $ \_ -> do
+                    logger INFO "clear supplementary groups"
+                    setGroups []
+        forM_ (privilegeDropGroupID plan) $ \gid -> do
+            logger INFO $ "setgid to " <> maybe (toLogStr $ show gid) toLogStr (privilegeDropGroupName plan)
+            setGroupID $ fromIntegral gid
+            verifyGroupID abort gid
+        forM_ (privilegeDropUserID plan) $ \uid -> do
+            logger INFO $ "setuid to " <> maybe (toLogStr $ show uid) toLogStr (privilegeDropUserName plan)
+            setUserID $ fromIntegral uid
+            verifyUserID abort uid
+        verifySupplementaryGroups abort $ privilegeDropSupplementaryGroups plan
+        logger DEBUG "testing setuid(0), verify that root priviledge can't be regranted"
+        catch (setUserID 0) $ \(_ :: SomeException) -> logger DEBUG "setuid(0) failed as expected"
+        changedUser <- getRealUserID
+        when (changedUser == 0) $ abort "unable to drop root priviledge, aborting"
+        return True
 
 verifyUserID :: (LogStr -> IO ()) -> PrivilegeID -> IO ()
 verifyUserID abort expectedUserID = do

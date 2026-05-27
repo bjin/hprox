@@ -245,8 +245,8 @@ reverseProxy ProxySettings{..} mgr fallback =
                 }
             dest = ProxyDest (rewriteUpstream rewrite) (rewritePort rewrite)
         in if rewriteSecure rewrite
-             then WPRModifiedRequestSecure nreq dest
-             else WPRModifiedRequest nreq dest
+           then WPRModifiedRequestSecure nreq dest
+           else WPRModifiedRequest nreq dest
 
 selectHttpProxyTarget :: Request -> Maybe HttpProxyTarget
 selectHttpProxyTarget req
@@ -300,16 +300,16 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
         | Just target@HttpProxyTarget{..} <- selectHttpProxyTarget req = do
             authorized <- checkAuth pset req
             if authorized
-                then return $ WPRModifiedRequest
-                    (proxiedRequest target)
-                    (ProxyDest httpProxyTargetHost httpProxyTargetPort)
-                else if hideProxyAuth
-                    then do
-                        logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
-                        return $ WPRApplication fallback
-                    else do
-                        logger WARN $ "unauthorized request: " <> logRequest req
-                        return $ WPRResponse (proxyAuthRequiredResponse pset)
+            then return $ WPRModifiedRequest
+                (proxiedRequest target)
+                (ProxyDest httpProxyTargetHost httpProxyTargetPort)
+            else if hideProxyAuth
+                 then do
+                     logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+                     return $ WPRApplication fallback
+                 else do
+                     logger WARN $ "unauthorized request: " <> logRequest req
+                     return $ WPRResponse (proxyAuthRequiredResponse pset)
         | otherwise = return $ WPRApplication fallback
       where
         websocketTarget = do
@@ -317,8 +317,8 @@ httpGetProxy pset@ProxySettings{..} mgr fallback = waiProxyToSettings proxyRespo
             let (wsHost, wsPort) = parseHostPortWithDefault 80 ws
                 wsWrapper = if wsPort == 443 then WPRProxyDestSecure else WPRProxyDest
             if wpsUpgradeToRaw defaultWaiProxySettings req
-              then Just (ProxyDest wsHost wsPort, wsWrapper)
-              else Nothing
+            then Just (ProxyDest wsHost wsPort, wsWrapper)
+            else Nothing
 
         proxiedRequest target@HttpProxyTarget{..} =
             let authority = renderHttpProxyAuthority target
@@ -342,28 +342,28 @@ httpConnectProxyWith
 httpConnectProxyWith runTCPClient pset@ProxySettings{..} fallback req@(parseConnectProxy -> Just (host, port)) respond = do
     authorized <- checkAuth pset req
     if authorized
-      then do
-          forM_ mPaddingType $ \paddingType ->
-            logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
-                           " for " <> logRequest req
-          responseStarted <- newIORef False
-          connected <- tryIOException $ runTCPClient settings (respondResponse responseStarted)
-          case connected of
-              Right received -> return received
-              Left ex        -> do
-                  started <- readIORef responseStarted
-                  if started
-                    then throwIO ex
-                    else do
-                        logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
-                        respond connectFailureResponse
-      else if hideProxyAuth
-             then do
-                 logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
-                 fallback req respond
-             else do
-                 logger WARN $ "unauthorized request: " <> logRequest req
-                 respond (proxyAuthRequiredResponse pset)
+    then do
+        forM_ mPaddingType $ \paddingType ->
+          logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
+                         " for " <> logRequest req
+        responseStarted <- newIORef False
+        connected <- tryIOException $ runTCPClient settings (respondResponse responseStarted)
+        case connected of
+            Right received -> return received
+            Left ex        -> do
+                started <- readIORef responseStarted
+                if started
+                then throwIO ex
+                else do
+                    logger WARN $ "CONNECT upstream failure for " <> logRequest req <> ": " <> toLogStr (show ex)
+                    respond connectFailureResponse
+    else if hideProxyAuth
+         then do
+             logger WARN $ "unauthorized request (hidden without response): " <> logRequest req
+             fallback req respond
+         else do
+             logger WARN $ "unauthorized request: " <> logRequest req
+             respond (proxyAuthRequiredResponse pset)
   where
     settings = CN.clientSettings port host
 

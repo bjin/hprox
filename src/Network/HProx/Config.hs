@@ -95,8 +95,8 @@ parser = info (helper <*> ver <*> config) (fullDesc <> progDesc desc)
             indices -> let (prefix, remote) = splitAt (last indices + 1) s
                        in Just (Nothing, BS8.pack prefix, BS8.pack remote)
         if BS8.null remote
-          then Nothing
-          else Just (domain, prefix, remote)
+        then Nothing
+        else Just (domain, prefix, remote)
     parseRev0 remote
       | null remote = Nothing
       | otherwise   = Just (Nothing, "/", BS8.pack remote)

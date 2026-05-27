@@ -89,11 +89,11 @@ readRequestBody readChunk expectedLength = go expectedLength []
         | otherwise      = do
             chunk <- readChunk
             if BS.null chunk
-              then return $ BS.concat $ reverse chunks
-              else do
-                  let (accepted, _extra) = BS.splitAt remaining chunk
-                      nextRemaining = remaining - BS.length accepted
-                  go nextRemaining (accepted : chunks)
+            then return $ BS.concat $ reverse chunks
+            else do
+                let (accepted, _extra) = BS.splitAt remaining chunk
+                    nextRemaining = remaining - BS.length accepted
+                go nextRemaining (accepted : chunks)
 
 readChunkedRequestBody :: IO BS.ByteString -> Int -> IO BS.ByteString
 readChunkedRequestBody readChunk maxLength = go 0 []
@@ -101,12 +101,12 @@ readChunkedRequestBody readChunk maxLength = go 0 []
     go total chunks = do
         chunk <- readChunk
         if BS.null chunk
-          then return $ BS.concat $ reverse chunks
-          else do
-              let nextTotal = total + BS.length chunk
-              if nextTotal > maxLength
-                then return ""
-                else go nextTotal (chunk : chunks)
+        then return $ BS.concat $ reverse chunks
+        else do
+            let nextTotal = total + BS.length chunk
+            if nextTotal > maxLength
+            then return ""
+            else go nextTotal (chunk : chunks)
 
 decodeDoHQuery :: BS8.ByteString -> Maybe DoHRequest
 decodeDoHQuery dnsQuery =
