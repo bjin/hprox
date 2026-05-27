@@ -56,8 +56,8 @@ library:
   - Network.HProx.Naive
   - Network.HProx.Route
   - Network.HProx.Runtime
-  - Network.HProx.Platform.Quic
-  - Network.HProx.Platform.Unix
+  - Network.HProx.Quic
+  - Network.HProx.Unix
   - Network.HProx.Util
   - Paths_hprox
   dependencies:

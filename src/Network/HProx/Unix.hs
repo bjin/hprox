@@ -5,7 +5,7 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Network.HProx.Platform.Unix
+module Network.HProx.Unix
   ( PrivilegeDropPlan(..)
   , ResolvedGroup(..)
   , ResolvedUser(..)

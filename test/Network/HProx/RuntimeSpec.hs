@@ -19,12 +19,12 @@ import Network.Wai.Handler.WarpTLS
 import System.IO.Error             (mkIOError)
 
 #ifdef QUIC_ENABLED
-import Network.HProx.Platform.Quic
-import Network.QUIC.Internal       qualified as Q
-import Network.TLS.SessionManager  qualified as SM
+import Network.HProx.Quic
+import Network.QUIC.Internal      qualified as Q
+import Network.TLS.SessionManager qualified as SM
 #endif
 #ifdef OS_UNIX
-import Network.HProx.Platform.Unix
+import Network.HProx.Unix
 #endif
 
 import Network.HProx.Config

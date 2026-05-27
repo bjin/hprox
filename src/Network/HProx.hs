@@ -25,8 +25,8 @@ import Network.Wai             (Application)
 import Network.HProx.Auth
 import Network.HProx.Config
 import Network.HProx.Log
-import Network.HProx.Platform.Unix
 import Network.HProx.Runtime
+import Network.HProx.Unix
 import Paths_hprox
 
 -- | Run HProx in front of fallback 'Application', with specified 'Config'

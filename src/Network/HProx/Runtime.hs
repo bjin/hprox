@@ -65,8 +65,8 @@ import Network.Wai.Handler.WarpTLS
 import System.IO.Error (ioeGetErrorType)
 
 #ifdef QUIC_ENABLED
-import Network.HProx.Platform.Quic
-import Network.QUIC.Internal       qualified as Q
+import Network.HProx.Quic
+import Network.QUIC.Internal qualified as Q
 #endif
 
 import Network.HProx.Config

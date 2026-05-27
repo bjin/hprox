@@ -4,7 +4,7 @@
 
 {-# LANGUAGE CPP #-}
 
-module Network.HProx.Platform.Quic
+module Network.HProx.Quic
   ( quicAddressPlan
   , quicAltSvc
 #ifdef QUIC_ENABLED
