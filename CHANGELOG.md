@@ -6,6 +6,7 @@
 
 ### Changed
 - Refactored Warp and QUIC to consume dynamic credentials from the runtime store instead of static defaults
+- Upgraded stack dependency snapshots and pinned TLS/QUIC-related packages to newer versions
 
 ### Fixed
 - Stopped QUIC from keeping stale embedded credentials by using callback-based SNI resolution at handshake time
