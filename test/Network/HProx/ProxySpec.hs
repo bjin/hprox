@@ -88,6 +88,7 @@ spec = do
         Warp.testWithApplication (pure $ httpConnectProxy authorizedSettings fallback) $ \proxyPort -> do
           response <- rawConnectRoundTrip proxyPort targetPort
           response `shouldBe` "ping"
+
     it "returns 502 when upstream CONNECT fails before tunnel establishment" $ do
       port <- getFreePort
       response <- runConnectApp authorizedSettings (connectRequestFor "127.0.0.1" port HT.http11)

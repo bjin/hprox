@@ -10,6 +10,7 @@
 
 ### Fixed
 - Stopped QUIC from keeping stale embedded credentials by using callback-based SNI resolution at handshake time
+- Fixed CONNECT tunnel handling on HTTP/1 by half-closing upstream writes when client input ends to avoid Windows hangs
 
 ## 0.7.0
 

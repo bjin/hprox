@@ -22,7 +22,7 @@ module Network.HProx.Impl
 
 import Control.Applicative        ((<|>))
 import Control.Concurrent.Async   (cancel, wait, waitEither, withAsync)
-import Control.Exception          (IOException, SomeException, throwIO, try)
+import Control.Exception          (IOException, SomeException, finally, throwIO, try)
 import Control.Monad              (forM_, unless, void, when)
 import Control.Monad.IO.Class     (liftIO)
 import Data.Binary.Builder        qualified as BB
@@ -34,6 +34,7 @@ import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.CaseInsensitive       qualified as CI
 import Data.Conduit.Network       qualified as CN
 import Data.IORef                 (newIORef, readIORef, writeIORef)
+import Data.Streaming.Network     qualified as SN
 import Data.Text.Encoding         qualified as TE
 import Network.HTTP.Client        qualified as HC
 import Network.HTTP.ReverseProxy
@@ -41,6 +42,7 @@ import Network.HTTP.ReverseProxy
     waiProxyToSettings, wpsSetIpHeader, wpsUpgradeToRaw)
 import Network.HTTP.Types         qualified as HT
 import Network.HTTP.Types.Header  qualified as HT
+import Network.Socket             qualified as Socket
 import System.Timeout             (timeout)
 
 import Data.Conduit
@@ -421,8 +423,9 @@ httpConnectProxyWith runTCPClient pset@ProxySettings{..} fallback req@(parseConn
                 unless (BS.null bs) (yield bs >> fromClient)
             toClient = awaitForever (liftIO . toClient')
 
-            clientToServer | Just padding <- mPaddingType = fromClient .| removePaddingConduit padding .| toServer
-                           | otherwise                    = fromClient .| toServer
+            clientToServer
+                | Just padding <- mPaddingType = fromClient .| removePaddingConduit padding .| toServer
+                | otherwise                    = fromClient .| toServer
 
             serverToClient | Just padding <- mPaddingType = fromServer .| addPaddingConduit padding .| toClient
                            | otherwise                    = fromServer .| toClient
@@ -430,6 +433,13 @@ httpConnectProxyWith runTCPClient pset@ProxySettings{..} fallback req@(parseConn
             when http1 $ runConduit $ yieldHttp1Response .| toClient
             -- gracefully close the other stream after 5 seconds if one side of stream is closed.
             void $ runStreams 5
-                (runConduit clientToServer)
+                (runConduit clientToServer `finally` shutdownServerWrite server)
                 (runConduit serverToClient)
+
+    shutdownServerWrite :: CN.AppData -> IO ()
+    shutdownServerWrite server =
+        case SN.appRawSocket server of
+            Just sock -> void $ tryIOException $ Socket.shutdown sock Socket.ShutdownSend
+            Nothing   -> return ()
+
 httpConnectProxyWith _ _ fallback req respond = fallback req respond
