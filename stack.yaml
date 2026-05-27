@@ -39,5 +39,4 @@ flags:
 apply-ghc-options: locals
 nix:
   packages:
-  - libcap
   - zlib
