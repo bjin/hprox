@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.7.1
+
 ### Added
 - Added SIGHUP-triggered TLS credential reloading with fingerprint-based change detection
 - Added runtime-driven SNI certificate lookup backed by a mutable TLS credential store
