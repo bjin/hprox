@@ -6,23 +6,32 @@ module Network.HProx.ProxySpec
   ( spec
   ) where
 
-import Control.Concurrent.Async   (withAsync)
-import Control.Exception          (AsyncException(..), SomeException, bracket, throwIO, try)
-import Control.Monad              (unless)
-import Data.ByteString.Base64     qualified as B64
-import Data.ByteString.Char8      qualified as BS8
-import Data.ByteString.Lazy       qualified as LBS
-import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Control.Concurrent              (forkIO)
+import Control.Concurrent.Async        (withAsync)
+import Control.Concurrent.MVar         (newEmptyMVar, putMVar, takeMVar)
+import Control.Exception
+    (AsyncException(..), IOException, SomeException, bracket, bracketOnError, finally, throwIO, try)
+import Control.Monad                   (unless)
+import Data.ByteString                 qualified as BS
+import Data.ByteString.Base64          qualified as B64
+import Data.ByteString.Char8           qualified as BS8
+import Data.ByteString.Lazy            qualified as LBS
+import Data.ByteString.Lazy.Char8      qualified as LBS8
+import Data.CaseInsensitive            qualified as CI
 import Data.IORef
-import Network.HTTP.Client        qualified as HC
-import Network.HTTP.Types         qualified as HT
-import Network.HTTP.Types.Header  qualified as HT
+import Data.Maybe                      (fromMaybe, mapMaybe)
+import Data.Streaming.Network          qualified as CN
+import Data.Streaming.Network.Internal (AppData(..))
+import Network.HTTP.Client             qualified as HC
+import Network.HTTP.Types              qualified as HT
+import Network.HTTP.Types.Header       qualified as HT
 import Network.Socket
-import Network.Socket.ByteString  qualified as SocketBS
+import Network.Socket.ByteString       qualified as SocketBS
 import Network.Wai
-import Network.Wai.Handler.Warp   qualified as Warp
+import Network.Wai.Internal            (Response(..), ResponseReceived(..))
 import Network.Wai.Test
-import System.Log.FastLogger      qualified as FL
+import System.Log.FastLogger           qualified as FL
+import System.Timeout                  (timeout)
 
 import Network.HProx.Impl
 
@@ -37,7 +46,7 @@ spec = do
       lookup "Proxy-Authenticate" (simpleHeaders response) `shouldBe` Just "Basic realm=\"hprox\""
 
     it "accepts valid Basic credentials" $
-      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+      withRawHttpServer (const "ok") $ \port -> do
         response <- runProxyApp (httpProxy authorizedSettings) (proxyRequestForPort port basicAliceSecret)
         simpleStatus response `shouldBe` HT.status200
 
@@ -54,7 +63,7 @@ spec = do
       simpleStatus response `shouldBe` HT.status407
 
     it "redacts proxy auth passwords in trace logs" $
-      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+      withRawHttpServer (const "ok") $ \port -> do
         logs <- newIORef []
         let loggingSettings = authorizedSettings
               { logger = \_ msg -> modifyIORef' logs (LBS.fromStrict (FL.fromLogStr msg) :)
@@ -83,11 +92,9 @@ spec = do
       simpleStatus response `shouldBe` fallbackStatus
       simpleBody response `shouldBe` fallbackBody
 
-    it "establishes an HTTP/1 CONNECT tunnel after upstream connection succeeds" $
-      withTcpEchoServer $ \targetPort ->
-        Warp.testWithApplication (pure $ httpConnectProxy authorizedSettings fallback) $ \proxyPort -> do
-          response <- rawConnectRoundTrip proxyPort targetPort
-          response `shouldBe` "ping"
+    it "establishes an HTTP/1 CONNECT tunnel after upstream connection succeeds" $ do
+      response <- rawConnectRoundTrip
+      response `shouldBe` "ping"
 
     it "returns 502 when upstream CONNECT fails before tunnel establishment" $ do
       port <- getFreePort
@@ -181,7 +188,7 @@ spec = do
 
   describe "HTTP proxy upstream requests" $
     it "uses absolute URI authority for Host and strips proxy boundary headers" $
-      Warp.testWithApplication (pure observeProxyRequestApp) $ \port -> do
+      withRawHttpServer observeRawProxyRequestBody $ \port -> do
         let authority = "127.0.0.1:" <> BS8.pack (show port)
             responseBody = LBS8.lines . simpleBody
             proxiedReq = defaultRequest
@@ -211,10 +218,115 @@ spec = do
                      , "False"
                      , "True"
                      ]
+
+-- Keep proxy upstream tests independent of Warp's Windows accept loop.
+withRawHttpServer :: (BS.ByteString -> LBS.ByteString) -> (Int -> IO a) -> IO a
+withRawHttpServer responseBody action =
+  bracket open cleanup run
+  where
+    open = do
+      accepted <- newIORef Nothing
+      sock <- openTcpServerSocket
+      return (sock, accepted)
+
+    cleanup (sock, accepted) = do
+      closeIgnoringErrors sock
+      readIORef accepted >>= mapM_ closeIgnoringErrors
+
+    run server@(sock, _) = do
+      done <- newEmptyMVar
+      _ <- forkIO $ try (acceptAndRespond server) >>= putMVar done
+      result <- action . fromIntegral =<< socketPort sock
+      serverResult <- timeout 2000000 (takeMVar done)
+      case serverResult of
+        Just (Left ex) -> throwIO (ex :: SomeException)
+        _              -> return result
+
+    acceptAndRespond (sock, accepted) =
+      bracket (acceptClient sock accepted) closeIgnoringErrors $ \conn -> do
+        requestBytes <- recvHttpRequest conn
+        sendHttpResponse conn $ responseBody requestBytes
+
+    acceptClient sock accepted = do
+      (conn, _) <- accept sock
+      writeIORef accepted (Just conn)
+      return conn
+
+openTcpServerSocket :: IO Socket
+openTcpServerSocket = bracketOnError open closeIgnoringErrors $ \sock -> do
+  setSocketOption sock ReuseAddr 1
+  bind sock (SockAddrInet 0 loopbackAddress)
+  listen sock (max 2048 maxListenQueue)
+  return sock
+  where
+    open = socket AF_INET Stream defaultProtocol
+
+recvHttpRequest :: Socket -> IO BS.ByteString
+recvHttpRequest conn = go BS.empty
+  where
+    go received
+      | "\r\n\r\n" `BS.isInfixOf` received = return received
+      | BS.length received > 65536 = ioError $ userError "upstream HTTP request headers exceeded test limit"
+      | otherwise = do
+          chunk <- recvWithTimeout conn
+          if BS.null chunk
+            then ioError $ userError "upstream HTTP request ended before headers completed"
+            else go (received <> chunk)
+
+sendHttpResponse :: Socket -> LBS.ByteString -> IO ()
+sendHttpResponse conn body =
+  let strictBody = LBS.toStrict body
+  in SocketBS.sendAll conn $ BS8.concat
+       [ "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+       , BS8.pack (show $ BS.length strictBody)
+       , "\r\nConnection: close\r\n\r\n"
+       , strictBody
+       ]
+
+closeIgnoringErrors :: Socket -> IO ()
+closeIgnoringErrors sock = do
+  closed <- try (close sock) :: IO (Either IOException ())
+  case closed of
+    Left _   -> return ()
+    Right () -> return ()
+
+observeRawProxyRequestBody :: BS.ByteString -> LBS.ByteString
+observeRawProxyRequestBody requestBytes =
+  LBS8.unlines
+    [ LBS.fromStrict $ headerValue HT.hHost
+    , LBS.fromStrict $ headerValue HT.hHost
+    , LBS8.pack $ show $ hasHeader HT.hProxyAuthorization
+    , LBS8.pack $ show $ hasHeader "Forwarded"
+    , LBS8.pack $ show $ hasHeader "X-Forwarded-For"
+    , LBS8.pack $ show $ hasHeader "Proxy-Connection"
+    , LBS8.pack $ show $ hasHeader "cf-ray"
+    , LBS8.pack $ show $ hasHeader "User-Agent"
+    ]
+  where
+    headers = mapMaybe parseHeader $ takeWhile (not . BS.null) $ drop 1 $ map trimCR $ BS8.lines requestBytes
+    normalizedHeaders = [(CI.mk name, value) | (name, value) <- headers]
+
+    headerValue name = fromMaybe "" $ lookup name normalizedHeaders
+    hasHeader name = lookup name normalizedHeaders /= Nothing
+
+    parseHeader line =
+      let (name, rest) = BS8.break (== ':') line
+      in if BS.null rest
+         then Nothing
+         else Just (name, BS8.dropWhile (== ' ') $ BS.drop 1 rest)
+
+    trimCR line
+      | "\r" `BS.isSuffixOf` line = BS.init line
+      | otherwise                 = line
+
 runProxyApp :: (HC.Manager -> Middleware) -> Request -> IO SResponse
 
 runProxyApp middleware req = do
-  manager <- HC.newManager HC.defaultManagerSettings
+  manager <- HC.newManager $
+    HC.managerSetProxy HC.noProxy HC.defaultManagerSettings
+      { HC.managerIdleConnectionCount = 0
+      , HC.managerResponseTimeout = HC.responseTimeoutMicro 2000000
+      }
   runSession (srequest $ SRequest req "") (middleware manager fallback)
 
 runConnectApp :: ProxySettings -> Request -> IO SResponse
@@ -293,18 +405,29 @@ getFreePort = bracket open close socketPortInt
     socketPortInt sock = fromIntegral <$> socketPort sock
 
 withTcpEchoServer :: (Int -> IO a) -> IO a
-withTcpEchoServer action = bracket open close run
+withTcpEchoServer action = do
+  accepted <- newIORef Nothing
+  bracket (open accepted) cleanup run
   where
-    open = do
-      sock <- socket AF_INET Stream defaultProtocol
-      setSocketOption sock ReuseAddr 1
-      bind sock (SockAddrInet 0 loopbackAddress)
-      listen sock 1
-      return sock
+    open accepted = do
+      sock <- openTcpServerSocket
+      return (sock, accepted)
 
-    run sock =
-      withAsync (bracket (fst <$> accept sock) close echoLoop) $ \_ ->
-        action . fromIntegral =<< socketPort sock
+    cleanup (sock, accepted) = do
+      closeIgnoringErrors sock
+      readIORef accepted >>= mapM_ closeIgnoringErrors
+
+    run server@(sock, _) =
+      withAsync (acceptAndEcho server) $ \_ ->
+        (action . fromIntegral =<< socketPort sock) `finally` cleanup server
+
+    acceptAndEcho (sock, accepted) =
+      bracket (acceptClient sock accepted) closeIgnoringErrors echoLoop
+
+    acceptClient sock accepted = do
+      (conn, _) <- accept sock
+      writeIORef accepted (Just conn)
+      return conn
 
     echoLoop conn = do
       bs <- SocketBS.recv conn 4096
@@ -312,26 +435,50 @@ withTcpEchoServer action = bracket open close run
         SocketBS.sendAll conn bs
         echoLoop conn
 
-rawConnectRoundTrip :: Int -> Int -> IO BS8.ByteString
-rawConnectRoundTrip proxyPort targetPort = bracket open close $ \sock -> do
-  SocketBS.sendAll sock $ BS8.concat
-    [ "CONNECT 127.0.0.1:"
-    , BS8.pack (show targetPort)
-    , " HTTP/1.1\r\nHost: 127.0.0.1:"
-    , BS8.pack (show targetPort)
-    , "\r\nProxy-Authorization: "
-    , basicAliceSecret
-    , "\r\n\r\n"
-    ]
-  response <- SocketBS.recv sock 4096
-  response `shouldSatisfy` BS8.isPrefixOf "HTTP/1.1 200"
-  SocketBS.sendAll sock "ping"
-  SocketBS.recv sock 4096
-  where
-    open = do
-      sock <- socket AF_INET Stream defaultProtocol
-      connect sock (SockAddrInet (fromIntegral proxyPort) loopbackAddress)
-      return sock
+
+-- Exercise the HTTP/1 raw response path without running a nested Warp server.
+rawConnectRoundTrip :: IO BS8.ByteString
+rawConnectRoundTrip = do
+  outbound <- newIORef []
+  clientChunks <- newIORef ["ping", ""]
+  let targetHost = "127.0.0.1"
+      targetPort = 18443
+      runTCPClient settings app = do
+        CN.getHost settings `shouldBe` targetHost
+        CN.getPort settings `shouldBe` targetPort
+        inbound <- newEmptyMVar
+        app AppData
+          { appRead' = takeMVar inbound
+          , appWrite' = \bytes -> do
+              putMVar inbound bytes
+              putMVar inbound BS.empty
+          , appSockAddr' = SockAddrInet 0 loopbackAddress
+          , appLocalAddr' = Nothing
+          , appCloseConnection' = return ()
+          , appRawSocket' = Nothing
+          }
+      nextClientChunk =
+        atomicModifyIORef' clientChunks $ \chunks ->
+          case chunks of
+            []     -> ([], BS.empty)
+            x : xs -> (xs, x)
+      respondRaw (ResponseRaw raw _) = do
+        raw nextClientChunk (\bytes -> modifyIORef' outbound (bytes :))
+        return ResponseReceived
+      respondRaw _ = expectationFailure "expected HTTP/1 raw CONNECT response" >> return ResponseReceived
+  _ <- httpConnectProxyWith runTCPClient authorizedSettings fallback (connectRequestFor targetHost targetPort HT.http11) respondRaw
+  sent <- BS.concat . reverse <$> readIORef outbound
+  sent `shouldSatisfy` BS8.isPrefixOf "HTTP/1.1 200"
+  case BS.breakSubstring "\r\n\r\n" sent of
+    (_, body) | not (BS.null body) -> return $ BS.drop 4 body
+    _                             -> expectationFailure "raw CONNECT response did not contain an HTTP header terminator" >> return BS.empty
+
+recvWithTimeout :: Socket -> IO BS8.ByteString
+recvWithTimeout sock = do
+  received <- timeout 2000000 (SocketBS.recv sock 4096)
+  case received of
+    Just bytes -> return bytes
+    Nothing    -> ioError $ userError "timed out waiting for proxy socket response"
 
 loopbackAddress :: HostAddress
 loopbackAddress = tupleToHostAddress (127, 0, 0, 1)
@@ -372,19 +519,3 @@ baseSettings = ProxySettings
   , logger         = \_ _ -> return ()
   }
 
-observeProxyRequestApp :: Application
-observeProxyRequestApp req respond = respond $ responseLBS
-  HT.status200
-  [("Content-Type", "text/plain")]
-  (LBS8.unlines
-     [ LBS.fromStrict $ maybe "" id $ requestHeaderHost req
-     , LBS.fromStrict $ maybe "" id $ lookup HT.hHost (requestHeaders req)
-     , LBS8.pack $ show $ hasHeader HT.hProxyAuthorization
-     , LBS8.pack $ show $ hasHeader "Forwarded"
-     , LBS8.pack $ show $ hasHeader "X-Forwarded-For"
-     , LBS8.pack $ show $ hasHeader "Proxy-Connection"
-     , LBS8.pack $ show $ hasHeader "cf-ray"
-     , LBS8.pack $ show $ hasHeader "User-Agent"
-     ])
-  where
-    hasHeader name = lookup name (requestHeaders req) /= Nothing
