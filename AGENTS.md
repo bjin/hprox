@@ -99,7 +99,7 @@ When changing behavior, add or update the focused spec first. Prefer testing the
 
 ## Style
 
-- Follow `HASKELL-STYLE.md` for Haskell source style in `src/` and `app/`.
+- Follow `HASKELL-STYLE.md` for Haskell source style in `src/`, `app/`, and `test/`.
 - Let `stylish-haskell` decide import layout and alignment, then review formatter output for CPP-sensitive code.
 - Use explicit export lists for every module.
 - Add top-level type signatures.

@@ -1,7 +1,8 @@
 # Haskell Source Style
 
-This guide applies to Haskell source files under `src/` and `app/`. It does not apply to
-`test/`, which may use test-local patterns when they make specifications clearer.
+This guide applies to every Haskell source file in the repository, including `src/`, `app/`, and
+`test/`. Test specifications may still use test-local naming and ordering when that makes behavior
+clearer, but formatting and layout should follow this guide.
 
 ## Formatter
 

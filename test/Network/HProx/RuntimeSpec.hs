@@ -36,178 +36,178 @@ import Test.Hspec
 
 spec :: Spec
 spec = do
-  describe "RuntimeConfig" $
-    it "normalizes log output and sorted reverse routes at the runtime boundary" $
-      buildRuntimeConfig defaultConfig
-        { _log = "stderr"
-        , _rev =
-            [ (Nothing, "/", "catch:80")
-            , (Just "example.com", "/api/", "api:443")
-            ]
-        } `shouldBe` RuntimeConfig
-          { runtimeConfigLogOutput = LogOutputStderr
-          , runtimeConfigReverseRoutes =
-              [ ReverseRoute (Just "example.com") "/api" "api:443"
-              , ReverseRoute Nothing "/" "catch:80"
-              ]
-          , runtimeConfigReverseRouteTuples =
-              [ (Just "example.com", "/api/", "api:443")
-              , (Nothing, "/", "catch:80")
-              ]
-          }
+    describe "RuntimeConfig" $
+        it "normalizes log output and sorted reverse routes at the runtime boundary" $
+            buildRuntimeConfig defaultConfig
+                { _log = "stderr"
+                , _rev =
+                    [ (Nothing, "/", "catch:80")
+                    , (Just "example.com", "/api/", "api:443")
+                    ]
+                } `shouldBe` RuntimeConfig
+                    { runtimeConfigLogOutput          = LogOutputStderr
+                    , runtimeConfigReverseRoutes      =
+                        [ ReverseRoute (Just "example.com") "/api" "api:443"
+                        , ReverseRoute Nothing "/" "catch:80"
+                        ]
+                    , runtimeConfigReverseRouteTuples =
+                        [ (Just "example.com", "/api/", "api:443")
+                        , (Nothing, "/", "catch:80")
+                        ]
+                    }
 
-  describe "runtime config validation" $ do
-    it "rejects direct Config listener ports outside the TCP port range" $ do
-      validateRuntimeConfig defaultConfig { _port = 0 } `shouldBe` Left "invalid --port: 0 (expected 1..65535)"
-      validateRuntimeConfig defaultConfig { _port = 65536 } `shouldBe` Left "invalid --port: 65536 (expected 1..65535)"
+    describe "runtime config validation" $ do
+        it "rejects direct Config listener ports outside the TCP port range" $ do
+            validateRuntimeConfig defaultConfig { _port = 0 } `shouldBe` Left "invalid --port: 0 (expected 1..65535)"
+            validateRuntimeConfig defaultConfig { _port = 65536 } `shouldBe` Left "invalid --port: 65536 (expected 1..65535)"
 
 #ifdef QUIC_ENABLED
-    it "rejects direct Config QUIC ports outside the UDP port range" $ do
-      validateRuntimeConfig defaultConfig { _quic = Just 0 } `shouldBe` Left "invalid --quic: 0 (expected 1..65535)"
-      validateRuntimeConfig defaultConfig { _quic = Just 65536 } `shouldBe` Left "invalid --quic: 65536 (expected 1..65535)"
+        it "rejects direct Config QUIC ports outside the UDP port range" $ do
+            validateRuntimeConfig defaultConfig { _quic = Just 0 } `shouldBe` Left "invalid --quic: 0 (expected 1..65535)"
+            validateRuntimeConfig defaultConfig { _quic = Just 65536 } `shouldBe` Left "invalid --quic: 65536 (expected 1..65535)"
 #endif
-  describe "Warp runtime settings" $ do
-    it "captures default bind, port, server name, and no-parse-path settings" $
-      buildWarpRuntimePlan defaultConfig `shouldBe` WarpRuntimePlan
-        { runtimeBindHost = "*6"
-        , runtimePort = 3000
-        , runtimeServerName = "hprox"
-        , runtimeNoParsePath = True
-        }
+    describe "Warp runtime settings" $ do
+        it "captures default bind, port, server name, and no-parse-path settings" $
+            buildWarpRuntimePlan defaultConfig `shouldBe` WarpRuntimePlan
+                { runtimeBindHost    = "*6"
+                , runtimePort        = 3000
+                , runtimeServerName  = "hprox"
+                , runtimeNoParsePath = True
+                }
 
-    it "captures configured bind, port, and server name settings" $
-      buildWarpRuntimePlan defaultConfig
-        { _bind = Just "127.0.0.1"
-        , _port = 8080
-        , _name = "custom"
-        } `shouldBe` WarpRuntimePlan
-          { runtimeBindHost = "127.0.0.1"
-          , runtimePort = 8080
-          , runtimeServerName = "custom"
-          , runtimeNoParsePath = True
-          }
+        it "captures configured bind, port, and server name settings" $
+            buildWarpRuntimePlan defaultConfig
+                { _bind = Just "127.0.0.1"
+                , _port = 8080
+                , _name = "custom"
+                } `shouldBe` WarpRuntimePlan
+                    { runtimeBindHost    = "127.0.0.1"
+                    , runtimePort        = 8080
+                    , runtimeServerName  = "custom"
+                    , runtimeNoParsePath = True
+                    }
 
-    it "uses dynamic SNI credentials and disables reusable TLS sessions" $ do
-      let settings = buildTlsSettings $ \_ -> return $ TLS.Credentials []
-      case tlsCredentials settings of
-        Just (TLS.Credentials credentials) -> credentials `shouldBe` []
-        Nothing -> expectationFailure "expected explicit empty TLS credentials"
-      case tlsSessionManager settings of
-        Nothing -> return ()
-        Just _  -> expectationFailure "expected disabled TLS session manager"
-      TLS.Credentials credentials <- TLS.onServerNameIndication (tlsServerHooks settings) Nothing
-      credentials `shouldBe` []
-  describe "runner selection" $ do
-    it "selects the plain Warp runner when no certificates are configured" $
-      selectRunnerPlan defaultConfig [] `shouldBe` PlainWarpRunner
+        it "uses dynamic SNI credentials and disables reusable TLS sessions" $ do
+            let settings = buildTlsSettings $ \_ -> return $ TLS.Credentials []
+            case tlsCredentials settings of
+                Just (TLS.Credentials credentials) -> credentials `shouldBe` []
+                Nothing -> expectationFailure "expected explicit empty TLS credentials"
+            case tlsSessionManager settings of
+                Nothing -> return ()
+                Just _  -> expectationFailure "expected disabled TLS session manager"
+            TLS.Credentials credentials <- TLS.onServerNameIndication (tlsServerHooks settings) Nothing
+            credentials `shouldBe` []
+    describe "runner selection" $ do
+        it "selects the plain Warp runner when no certificates are configured" $
+            selectRunnerPlan defaultConfig [] `shouldBe` PlainWarpRunner
 
-    it "selects the TLS Warp runner when certificates are configured" $
-      selectRunnerPlan defaultConfig [("example.com", ())] `shouldBe` TlsWarpRunner
+        it "selects the TLS Warp runner when certificates are configured" $
+            selectRunnerPlan defaultConfig [("example.com", ())] `shouldBe` TlsWarpRunner
 
 #ifdef QUIC_ENABLED
-    it "selects concurrent QUIC and TLS when QUIC is configured with certificates" $
-      selectRunnerPlan defaultConfig { _quic = Just 443 } [("example.com", ())]
-        `shouldBe` QuicAndTlsRunner 443
+        it "selects concurrent QUIC and TLS when QUIC is configured with certificates" $
+            selectRunnerPlan defaultConfig { _quic = Just 443 } [("example.com", ())]
+                `shouldBe` QuicAndTlsRunner 443
 
-    it "does not select QUIC without configured certificates" $
-      selectRunnerPlan defaultConfig { _quic = Just 443 } [] `shouldBe` PlainWarpRunner
+        it "does not select QUIC without configured certificates" $
+            selectRunnerPlan defaultConfig { _quic = Just 443 } [] `shouldBe` PlainWarpRunner
 
-    it "builds safer QUIC defaults" $ do
-      quicUse0RTT `shouldBe` False
-      quicAddressPlan Nothing 8443 `shouldBe` [("0.0.0.0", 8443), ("::", 8443)]
-      quicAddressPlan (Just "127.0.0.1") 8443 `shouldBe` [("127.0.0.1", 8443)]
-      quicAltSvc 8443 `shouldBe` "h3=\":8443\""
+        it "builds safer QUIC defaults" $ do
+            quicUse0RTT `shouldBe` False
+            quicAddressPlan Nothing 8443 `shouldBe` [("0.0.0.0", 8443), ("::", 8443)]
+            quicAddressPlan (Just "127.0.0.1") 8443 `shouldBe` [("127.0.0.1", 8443)]
+            quicAltSvc 8443 `shouldBe` "h3=\":8443\""
 
-    it "builds QUIC TLS config without stale credentials" $ do
-      sessionManager <- SM.newSessionManager quicSessionManagerConfig
-      let onSNI host =
-            if host == Just "example.com"
-              then return $ TLS.Credentials []
-              else fail $ "unexpected SNI host: " <> show host
-          config = buildQuicServerConfig Nothing onSNI sessionManager 8443
-      SM.dbMaxSize quicSessionManagerConfig `shouldBe` 0
-      case Q.scCredentials config of
-        TLS.Credentials credentials -> credentials `shouldBe` []
-      TLS.Credentials credentials <- TLS.onServerNameIndication (Q.scTlsHooks config) (Just "example.com")
-      credentials `shouldBe` []
+        it "builds QUIC TLS config without stale credentials" $ do
+            sessionManager <- SM.newSessionManager quicSessionManagerConfig
+            let onSNI host =
+                    if host == Just "example.com"
+                    then return $ TLS.Credentials []
+                    else fail $ "unexpected SNI host: " <> show host
+                config = buildQuicServerConfig Nothing onSNI sessionManager 8443
+            SM.dbMaxSize quicSessionManagerConfig `shouldBe` 0
+            case Q.scCredentials config of
+                TLS.Credentials credentials -> credentials `shouldBe` []
+            TLS.Credentials credentials <- TLS.onServerNameIndication (Q.scTlsHooks config) (Just "example.com")
+            credentials `shouldBe` []
 #endif
 #ifdef OS_UNIX
-  describe "privilege drop planning" $ do
-    it "uses the target user's primary group when no group is configured" $ do
-      let userEntry = ResolvedUser "alice" 1001 2001
-          groups =
-            [ ResolvedGroup "primary" 2001 []
-            , ResolvedGroup "extra" 2002 ["alice"]
-            , ResolvedGroup "other" 2003 ["bob"]
-            ]
-      planPrivilegeDrop (Just userEntry) Nothing groups
-        `shouldBe` PrivilegeDropPlan
-          { privilegeDropUserName = Just "alice"
-          , privilegeDropUserID = Just 1001
-          , privilegeDropGroupName = Nothing
-          , privilegeDropGroupID = Just 2001
-          , privilegeDropSupplementaryGroups = [2001, 2002]
-          }
+    describe "privilege drop planning" $ do
+        it "uses the target user's primary group when no group is configured" $ do
+            let userEntry = ResolvedUser "alice" 1001 2001
+                groups =
+                    [ ResolvedGroup "primary" 2001 []
+                    , ResolvedGroup "extra" 2002 ["alice"]
+                    , ResolvedGroup "other" 2003 ["bob"]
+                    ]
+            planPrivilegeDrop (Just userEntry) Nothing groups
+                `shouldBe` PrivilegeDropPlan
+                    { privilegeDropUserName            = Just "alice"
+                    , privilegeDropUserID              = Just 1001
+                    , privilegeDropGroupName           = Nothing
+                    , privilegeDropGroupID             = Just 2001
+                    , privilegeDropSupplementaryGroups = [2001, 2002]
+                    }
 
-    it "uses an explicit primary group for a target user" $ do
-      let userEntry = ResolvedUser "alice" 1001 2001
-          groupEntry = ResolvedGroup "service" 3001 []
-          groups = [ResolvedGroup "extra" 2002 ["alice"]]
-      planPrivilegeDrop (Just userEntry) (Just groupEntry) groups
-        `shouldBe` PrivilegeDropPlan
-          { privilegeDropUserName = Just "alice"
-          , privilegeDropUserID = Just 1001
-          , privilegeDropGroupName = Just "service"
-          , privilegeDropGroupID = Just 3001
-          , privilegeDropSupplementaryGroups = [3001, 2002]
-          }
+        it "uses an explicit primary group for a target user" $ do
+            let userEntry = ResolvedUser "alice" 1001 2001
+                groupEntry = ResolvedGroup "service" 3001 []
+                groups     = [ResolvedGroup "extra" 2002 ["alice"]]
+            planPrivilegeDrop (Just userEntry) (Just groupEntry) groups
+                `shouldBe` PrivilegeDropPlan
+                    { privilegeDropUserName            = Just "alice"
+                    , privilegeDropUserID              = Just 1001
+                    , privilegeDropGroupName           = Just "service"
+                    , privilegeDropGroupID             = Just 3001
+                    , privilegeDropSupplementaryGroups = [3001, 2002]
+                    }
 
-    it "clears supplementary groups for group-only drops" $ do
-      let groupEntry = ResolvedGroup "service" 3001 ["alice"]
-      planPrivilegeDrop Nothing (Just groupEntry) [groupEntry]
-        `shouldBe` PrivilegeDropPlan
-          { privilegeDropUserName = Nothing
-          , privilegeDropUserID = Nothing
-          , privilegeDropGroupName = Just "service"
-          , privilegeDropGroupID = Just 3001
-          , privilegeDropSupplementaryGroups = []
-          }
+        it "clears supplementary groups for group-only drops" $ do
+            let groupEntry = ResolvedGroup "service" 3001 ["alice"]
+            planPrivilegeDrop Nothing (Just groupEntry) [groupEntry]
+                `shouldBe` PrivilegeDropPlan
+                    { privilegeDropUserName            = Nothing
+                    , privilegeDropUserID              = Nothing
+                    , privilegeDropGroupName           = Just "service"
+                    , privilegeDropGroupID             = Just 3001
+                    , privilegeDropSupplementaryGroups = []
+                    }
 #endif
 
-  describe "access log filtering" $ do
-    it "suppresses health-check access logs" $
-      shouldSuppressAccessLog defaultRequest { rawPathInfo = "/.hprox/health" } `shouldBe` True
+    describe "access log filtering" $ do
+        it "suppresses health-check access logs" $
+            shouldSuppressAccessLog defaultRequest { rawPathInfo = "/.hprox/health" } `shouldBe` True
 
-    it "keeps normal request access logs" $
-      shouldSuppressAccessLog defaultRequest { rawPathInfo = "/" } `shouldBe` False
+        it "keeps normal request access logs" $
+            shouldSuppressAccessLog defaultRequest { rawPathInfo = "/" } `shouldBe` False
 
-  describe "runtime exception filtering" $ do
-    it "suppresses all exception logs above DEBUG level" $
-      runtimeExceptionToLog INFO displayedException `shouldSatisfy` isNothing
+    describe "runtime exception filtering" $ do
+        it "suppresses all exception logs above DEBUG level" $
+            runtimeExceptionToLog INFO displayedException `shouldSatisfy` isNothing
 
-    it "keeps ordinary displayable exceptions at DEBUG level" $
-      runtimeExceptionToLog DEBUG displayedException `shouldSatisfy` isJust
+        it "keeps ordinary displayable exceptions at DEBUG level" $
+            runtimeExceptionToLog DEBUG displayedException `shouldSatisfy` isJust
 
-    it "unwraps HTTP/2 wrappers before selecting the exception to log" $
-      fmap displayException (runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen displayedException)))
-        `shouldBe` Just (displayException displayedException)
+        it "unwraps HTTP/2 wrappers before selecting the exception to log" $
+            fmap displayException (runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen displayedException)))
+                `shouldBe` Just (displayException displayedException)
 
-    it "suppresses EOF IO exceptions" $
-      runtimeExceptionToLog DEBUG eofException `shouldSatisfy` isNothing
+        it "suppresses EOF IO exceptions" $
+            runtimeExceptionToLog DEBUG eofException `shouldSatisfy` isNothing
 
-    it "suppresses HTTP/2 errors and recursively classified HTTP/2 wrappers" $ do
-      runtimeExceptionToLog DEBUG (toException H2.ConnectionIsClosed) `shouldSatisfy` isNothing
-      runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen eofException)) `shouldSatisfy` isNothing
+        it "suppresses HTTP/2 errors and recursively classified HTTP/2 wrappers" $ do
+            runtimeExceptionToLog DEBUG (toException H2.ConnectionIsClosed) `shouldSatisfy` isNothing
+            runtimeExceptionToLog DEBUG (toException (H2.BadThingHappen eofException)) `shouldSatisfy` isNothing
 
 #ifdef QUIC_ENABLED
-    it "suppresses QUIC errors and recursively classified QUIC wrappers" $ do
-      runtimeExceptionToLog DEBUG (toException Q.ConnectionIsReset) `shouldSatisfy` isNothing
-      runtimeExceptionToLog DEBUG (toException (Q.BadThingHappen eofException)) `shouldSatisfy` isNothing
+        it "suppresses QUIC errors and recursively classified QUIC wrappers" $ do
+            runtimeExceptionToLog DEBUG (toException Q.ConnectionIsReset) `shouldSatisfy` isNothing
+            runtimeExceptionToLog DEBUG (toException (Q.BadThingHappen eofException)) `shouldSatisfy` isNothing
 #endif
 
-    it "suppresses Warp TLS and peer-close exceptions" $ do
-      runtimeExceptionToLog DEBUG (toException InsecureConnectionDenied) `shouldSatisfy` isNothing
-      runtimeExceptionToLog DEBUG (toException ConnectionClosedByPeer) `shouldSatisfy` isNothing
+        it "suppresses Warp TLS and peer-close exceptions" $ do
+            runtimeExceptionToLog DEBUG (toException InsecureConnectionDenied) `shouldSatisfy` isNothing
+            runtimeExceptionToLog DEBUG (toException ConnectionClosedByPeer) `shouldSatisfy` isNothing
 
 displayedException :: SomeException
 displayedException = toException $ userError "display me"

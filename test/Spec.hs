@@ -21,17 +21,17 @@ import Test.Hspec
 
 main :: IO ()
 main = hspec $ do
-  describe "hprox test suite" $
-    it "runs" $
-      True `shouldBe` True
-  AuthSpec.spec
-  ConfigSpec.spec
-  DoHSpec.spec
-  PureSpec.spec
-  HeadersSpec.spec
-  MiddlewareSpec.spec
-  NaiveSpec.spec
-  RouteSpec.spec
-  ProxySpec.spec
-  TLSSpec.spec
-  RuntimeSpec.spec
+    describe "hprox test suite" $
+        it "runs" $
+            True `shouldBe` True
+    AuthSpec.spec
+    ConfigSpec.spec
+    DoHSpec.spec
+    PureSpec.spec
+    HeadersSpec.spec
+    MiddlewareSpec.spec
+    NaiveSpec.spec
+    RouteSpec.spec
+    ProxySpec.spec
+    TLSSpec.spec
+    RuntimeSpec.spec
