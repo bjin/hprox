@@ -113,17 +113,17 @@ decodeDoHQuery dnsQuery =
     case DNS.decode dnsQuery of
         Right (DNSMessage { question = [q], header = DNSHeader {..} }) ->
             Just DoHRequest
-              { dohIdentifier = identifier
-              , dohQuestion   = q
-              }
+                { dohIdentifier = identifier
+                , dohQuestion   = q
+                }
         _otherwise -> Nothing
 
 encodeDoHResponse :: DNS.Identifier -> DNSMessage -> Response
 encodeDoHResponse ident dnsResp@DNSMessage{header = header} =
     let encoded = DNS.encode (dnsResp {header = header {identifier = ident} })
     in responseKnownLength HT.status200
-         [("Content-Type", "application/dns-message")]
-         (LBS.fromStrict encoded)
+           [("Content-Type", "application/dns-message")]
+           (LBS.fromStrict encoded)
 
 errorResp :: Response
 errorResp = responseLBS HT.status400 [("Content-Type", "text/plain")] "invalid dns-over-https request"

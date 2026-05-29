@@ -158,9 +158,9 @@ parseBasicProxyAuthorization :: BS.ByteString -> Maybe BS.ByteString
 parseBasicProxyAuthorization authHeader =
     case BS8.words authHeader of
         [scheme, payload] | CI.mk scheme == ("basic" :: CI.CI BS.ByteString)
-              -> either (const Nothing) Just (B64.decode payload)
+            -> either (const Nothing) Just (B64.decode payload)
         _otherwise
-              -> Nothing
+            -> Nothing
 
 redactedCredential :: Maybe BS.ByteString -> BS.ByteString
 redactedCredential Nothing = "<invalid>"
@@ -202,8 +202,8 @@ pacProvider fallback req respond
     | pathInfo req == [".hprox", "config.pac"],
       Just host' <- lookup forwardedHostHeader (requestHeaders req) <|> requestHeaderHost req =
         let issecure = case lookup forwardedProtoHeader (requestHeaders req) of
-                Just proto -> headerValueEquals "https" proto
-                Nothing    -> isSecure req
+                           Just proto -> headerValueEquals "https" proto
+                           Nothing    -> isSecure req
             scheme = if issecure then "HTTPS" else "PROXY"
             defaultPort = if issecure then ":443" else ":80"
             host | 58 `BS.elem` host' = host' -- ':'
@@ -279,8 +279,7 @@ selectHttpProxyTarget req
     scheme         = lookup xSchemeHeader (requestHeaders req)
     isHTTP2Proxy   = HT.httpMajor (httpVersion req) >= 2 && maybe False (headerValueEquals "http") scheme && isSecure req
 
-    (hostPortP, newRawPathP) = BS8.span (/='/') $
-        BS.drop (BS.length rawPathPrefix) rawPath
+    (hostPortP, newRawPathP) = BS8.span (/='/') $ BS.drop (BS.length rawPathPrefix) rawPath
 
 parseProxyHostPortWithDefault :: Int -> BS.ByteString -> Maybe (BS.ByteString, Int)
 parseProxyHostPortWithDefault defaultPort hostPort
@@ -346,8 +345,8 @@ httpConnectProxyWith runTCPClient pset@ProxySettings{..} fallback req@(parseConn
     if authorized
     then do
         forM_ mPaddingType $ \paddingType ->
-          logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
-                         " for " <> logRequest req
+            logger DEBUG $ "naiveproxy padding type detected: " <> toLogStr (show paddingType) <>
+                           " for " <> logRequest req
         responseStarted <- newIORef False
         connected <- tryIOException $ runTCPClient settings (respondResponse responseStarted)
         case connected of

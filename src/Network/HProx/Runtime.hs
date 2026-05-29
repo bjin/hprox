@@ -177,20 +177,20 @@ runProxyServer conf@Config{..} logger settings credentialStore app = do
     case _doh of
         Nothing  -> runner app
         Just doh -> createResolver doh (\resolver -> runner (dnsOverHTTPS resolver app))
-    where
-      runner = case selectRunnerPlan conf (tlsCredentialStoreSources credentialStore) of
-          PlainWarpRunner -> runSettings settings
-          TlsWarpRunner ->
-              runTLS (buildTlsSettings lookupSNICredentials') settings
+  where
+    runner = case selectRunnerPlan conf (tlsCredentialStoreSources credentialStore) of
+        PlainWarpRunner -> runSettings settings
+        TlsWarpRunner ->
+            runTLS (buildTlsSettings lookupSNICredentials') settings
 #ifdef QUIC_ENABLED
-          QuicAndTlsRunner qport ->
-              runQuicAndTls logger _bind settings (buildTlsSettings lookupSNICredentials') lookupSNICredentials' qport
+        QuicAndTlsRunner qport ->
+            runQuicAndTls logger _bind settings (buildTlsSettings lookupSNICredentials') lookupSNICredentials' qport
 #else
-          QuicAndTlsRunner _ ->
-              runTLS (buildTlsSettings lookupSNICredentials') settings
+        QuicAndTlsRunner _ ->
+            runTLS (buildTlsSettings lookupSNICredentials') settings
 #endif
 
-      lookupSNICredentials' host = lookupSNICredentialsFromStore host credentialStore
+    lookupSNICredentials' host = lookupSNICredentialsFromStore host credentialStore
 
 buildWarpRuntimePlan :: Config -> WarpRuntimePlan
 buildWarpRuntimePlan Config{..} = WarpRuntimePlan
@@ -380,7 +380,6 @@ lookupTlsCredentialStore host TlsCredentialStore{..} = do
                 (_, value) : _ -> return $ loadedCredentialValue value
         Just _ ->
             either fail (return . loadedCredentialValue) (lookupSNIHost host snapshot)
-
 
 lookupSNIHost :: Maybe String -> [(String, a)] -> Either String a
 lookupSNIHost Nothing _ = Left "SNI: unspecified"

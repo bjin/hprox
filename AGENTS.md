@@ -99,7 +99,8 @@ When changing behavior, add or update the focused spec first. Prefer testing the
 
 ## Style
 
-- Let `stylish-haskell` decide import layout and alignment.
+- Follow `HASKELL-STYLE.md` for Haskell source style in `src/` and `app/`.
+- Let `stylish-haskell` decide import layout and alignment, then review formatter output for CPP-sensitive code.
 - Use explicit export lists for every module.
 - Add top-level type signatures.
 - Qualified imports are preferred when they improve clarity, especially for `ByteString`, `Text`, DNS, TLS, and HTTP modules.
