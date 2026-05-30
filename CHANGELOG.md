@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Fixed
+- Pinned custom quic dependency for FINAL_SIZE_ERROR fix
+
 ## 0.7.1
 
 ### Added
