@@ -6,8 +6,6 @@ extra-deps:
   commit: warp-3.4.13-patched
   subdirs:
   - warp
-- github: bjin/quic
-  commit: fix-invalid-final-size-minimal
 - crypto-token-0.2.0
 - crypton-1.1.3
 - crypton-asn1-encoding-0.10.0
@@ -26,6 +24,7 @@ extra-deps:
 - http3-0.1.3
 - mlkem-0.2.0.0
 - network-udp-0.0.0
+- quic-0.3.3
 - ram-0.22.0
 - sockaddr-0.0.1
 - time-hourglass-0.3.0
