@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.7.2
+
 ### Fixed
 - Restored the TLS SNI guard for clients without SNI: handshakes now abort before any certificate is sent instead of falling back to the first configured certificate (regression in 0.7.1)
 
