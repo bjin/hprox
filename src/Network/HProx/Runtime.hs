@@ -370,16 +370,12 @@ lookupSNICredentialsFromStore :: Maybe String -> TlsCredentialStore TLS.Credenti
 lookupSNICredentialsFromStore host store =
     TLS.Credentials . (: []) <$> lookupTlsCredentialStore host store
 
+-- Clients without a matching SNI hostname, including those sending no SNI,
+-- must abort the handshake before any configured certificate is revealed.
 lookupTlsCredentialStore :: Maybe String -> TlsCredentialStore credential -> IO credential
 lookupTlsCredentialStore host TlsCredentialStore{..} = do
     snapshot <- readIORef tlsCredentialStoreSnapshot
-    case host of
-        Nothing ->
-            case snapshot of
-                []             -> fail "SNI: no TLS credentials configured"
-                (_, value) : _ -> return $ loadedCredentialValue value
-        Just _ ->
-            either fail (return . loadedCredentialValue) (lookupSNIHost host snapshot)
+    either fail (return . loadedCredentialValue) (lookupSNIHost host snapshot)
 
 lookupSNIHost :: Maybe String -> [(String, a)] -> Either String a
 lookupSNIHost Nothing _ = Left "SNI: unspecified"

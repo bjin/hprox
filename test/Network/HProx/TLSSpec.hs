@@ -101,18 +101,17 @@ spec = do
                 reloadTlsCredentialStore logger store
                 lookupTlsCredentialStore (Just "example.com") store `shouldReturn` "cert-b:key-b"
 
-        it "selects the current first configured credential for missing SNI" $
+        it "rejects missing and unknown SNI instead of revealing a configured credential" $
             withTempCredential "hprox-first" "first-cert" "first-key" $ \firstCert ->
             withTempCredential "hprox-second" "second-cert" "second-key" $ \secondCert -> do
                 store <- newTlsCredentialStore testCredentialLoader
                     [ ("first.example", firstCert)
                     , ("second.example", secondCert)
                     ]
-                lookupTlsCredentialStore Nothing store `shouldReturn` "first-cert:first-key"
-                writeCredentialFiles firstCert "new-first-cert" "new-first-key"
-                (logger, _) <- captureLogger
-                reloadTlsCredentialStore logger store
-                lookupTlsCredentialStore Nothing store `shouldReturn` "new-first-cert:new-first-key"
+                lookupTlsCredentialStore Nothing store
+                    `shouldThrow` (== userError "SNI: unspecified")
+                lookupTlsCredentialStore (Just "unknown.example") store
+                    `shouldThrow` (== userError "SNI: unknown hostname (\"unknown.example\")")
 
         it "logs an install message only for changed credentials" $
             withTempCredential "hprox-first" "first-cert" "first-key" $ \firstCert ->
